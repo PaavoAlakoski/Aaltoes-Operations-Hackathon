@@ -1,0 +1,72 @@
+.skeleton {
+  border-top: 1px solid var(--line);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dot {
+  width: var(--dot);
+  height: var(--dot);
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: none;
+}
+
+.lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.bar,
+.barMeta {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--line);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.barMeta {
+  height: 10px;
+  opacity: 0.7;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+
+.empty {
+  padding: var(--s7) 0;
+  text-align: center;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.emptyTitle {
+  font-weight: var(--weight-bold);
+}
+
+.emptyText {
+  margin-top: var(--s2);
+  color: var(--text-meta);
+}
+
+.retry {
+  margin-top: var(--s4);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--asphalt);
+  color: var(--birch);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}

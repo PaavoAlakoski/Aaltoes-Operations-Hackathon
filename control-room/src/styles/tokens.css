@@ -1,0 +1,72 @@
+/* Bahn brand tokens. Colour means status and nothing else. */
+:root {
+  /* Surfaces and text */
+  --birch: #fffef7;
+  --asphalt: #12110e;
+  --sand: #ccc6ba;
+  --sand-light: #e6e1d6;
+  --warm-grey: #726958;
+
+  /* Status only */
+  --red: #b42c42;
+  --orange: #b04617;
+  --teal: #1f6f7b;
+  --green: #1b7a52;
+
+  /* Roles */
+  --bg: var(--birch);
+  --text: var(--asphalt);
+  --text-meta: var(--warm-grey);
+  --line: var(--sand-light);
+  --line-strong: var(--sand);
+  --focus: var(--asphalt);
+  --hover: rgba(18, 17, 14, 0.035);
+  --selected: rgba(18, 17, 14, 0.06);
+
+  /* Type: three sizes per screen at most, two weights */
+  --font-title: 'Unbounded', system-ui, sans-serif;
+  --font-body: 'Poppins', system-ui, sans-serif;
+  --font-mono: 'Reddit Mono', ui-monospace, monospace;
+  --size-title: 22px;
+  --size-body: 14px;
+  --size-meta: 12.5px;
+  --weight-regular: 400;
+  --weight-bold: 600;
+  --leading: 1.5;
+
+  /* 4/8 grid */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  --width-list: 960px;
+  --width-order: 1200px;
+  --gutter: 16px;
+  --radius: 8px;
+  --dot: 6px;
+
+  /* The one shadow: the lead decision and popovers */
+  --shadow-lift: 0 1px 2px rgba(18, 17, 14, 0.04), 0 8px 24px rgba(18, 17, 14, 0.06);
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --fast: 120ms;
+
+  color-scheme: light;
+}
+
+@media (min-width: 720px) {
+  :root {
+    --gutter: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fast: 0ms;
+  }
+}

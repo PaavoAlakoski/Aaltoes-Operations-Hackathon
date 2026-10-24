@@ -10,7 +10,8 @@
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "seed": "tsx --env-file=.env scripts/seed.ts"
+    "seed": "tsx --env-file=.env scripts/seed.ts",
+    "check:db": "tsx --env-file=.env scripts/check-db.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
