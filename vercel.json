@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "control-room": {
+      "root": "control-room",
+      "framework": "vite"
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": { "service": "control-room" } }
+  ]
+}
