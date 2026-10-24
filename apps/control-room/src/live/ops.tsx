@@ -61,8 +61,8 @@ interface Ops {
   simulateFerryJam: () => Promise<Incident>;
   /** Stages the train-delay scenario; pickup-watch raises the incident a few seconds later. */
   simulateTrainDelay: () => Promise<{ vehicle_id: string; order_ref: string | null }>;
-  /** Deletes what was sent while testing: people's messages and reports, the agent's replies and proposals. */
-  clearActivity: () => Promise<{ messages: number; incidents: number; suggestions: number }>;
+  /** Puts the demo back as the seed left it: what was sent is gone, cars, drivers and travel plans are restored. */
+  resetDemo: () => Promise<{ messages: number; chat: number; incidents: number; suggestions: number }>;
   setVehicleStatus: (vehicleId: string, status: Vehicle['status'], reason: string) => Promise<void>;
 }
 
@@ -129,6 +129,36 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     }, 800);
   }, []);
 
+  // Everything the room shows; again after a reset, when most of it changed at once.
+  const loadAll = useCallback(async (sb: OpsClient) => {
+    const since = new Date(Date.now() - 48 * 3600_000).toISOString();
+    const [cs, vs, is, ss, ms, ps, k, sts, ts, js, ds] = await Promise.all([
+      sb.from('corridors').select('*').order('id'),
+      sb.from('vehicles').select('*'),
+      sb.from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
+      sb.from('agent_suggestions').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(400),
+      sb.from('messages').select('*').order('created_at', { ascending: false }).limit(200),
+      sb.from('profiles').select('*').order('full_name'),
+      sb.from('ops_kpis').select('*').single(),
+      sb.from('pickup_sites').select('*'),
+      sb.from('driver_trips').select('*').order('created_at', { ascending: false }).limit(100),
+      sb.from('market_jobs').select('*'),
+      sb.from('driver_stays').select('*').order('created_at', { ascending: false }).limit(100),
+    ]);
+    setCorridors(check(cs));
+    setVehicles(new Map(check(vs).map((v) => [v.id, v])));
+    setIncidents(check(is));
+    setSuggestions(check(ss));
+    setMessages(check(ms));
+    setStaff(check(ps));
+    setKpis(k.data ?? null);
+    setSites(new Map(check(sts).map((x) => [x.id, x])));
+    setTrips(check(ts));
+    setJobs(check(js));
+    setStays(check(ds));
+    return check(cs);
+  }, []);
+
   // Load everything once per sign-in, then subscribe.
   const userId = session?.user.id ?? null;
   useEffect(() => (userId ? keepPresence(client()) : undefined), [userId]);
@@ -153,32 +183,8 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         setStatus('ready');
         return;
       }
-      const since = new Date(Date.now() - 48 * 3600_000).toISOString();
-      const [cs, vs, is, ss, ms, ps, k, sts, ts, js, ds] = await Promise.all([
-        sb.from('corridors').select('*').order('id'),
-        sb.from('vehicles').select('*'),
-        sb.from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
-        sb.from('agent_suggestions').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(400),
-        sb.from('messages').select('*').order('created_at', { ascending: false }).limit(200),
-        sb.from('profiles').select('*').order('full_name'),
-        sb.from('ops_kpis').select('*').single(),
-        sb.from('pickup_sites').select('*'),
-        sb.from('driver_trips').select('*').order('created_at', { ascending: false }).limit(100),
-        sb.from('market_jobs').select('*'),
-        sb.from('driver_stays').select('*').order('created_at', { ascending: false }).limit(100),
-      ]);
+      const cs = await loadAll(sb);
       if (cancelled) return;
-      setCorridors(check(cs));
-      setVehicles(new Map(check(vs).map((v) => [v.id, v])));
-      setIncidents(check(is));
-      setSuggestions(check(ss));
-      setMessages(check(ms));
-      setStaff(check(ps));
-      setKpis(k.data ?? null);
-      setSites(new Map(check(sts).map((x) => [x.id, x])));
-      setTrips(check(ts));
-      setJobs(check(js));
-      setStays(check(ds));
       setStatus('ready');
 
       // Private channels authorise with the signed-in user's token.
@@ -231,7 +237,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         .subscribe((s) => setLive(s === 'SUBSCRIBED' ? 'live' : s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'offline' : 'connecting'));
       channels.push(changes);
 
-      for (const c of check(cs)) {
+      for (const c of cs) {
         channels.push(
           sb
             .channel(corridorTopic(c.id), { config: { private: true } })
@@ -271,7 +277,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       presence.current = null;
       for (const ch of channels) sb.removeChannel(ch);
     };
-  }, [authReady, userId, refreshKpis]);
+  }, [authReady, userId, refreshKpis, loadAll]);
 
   // Tell the rest of the room which incident this person is looking at.
   useEffect(() => {
@@ -313,19 +319,9 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         return row;
       },
       simulateTrainDelay: async () => check(await sb().rpc('simulate_train_delay')) as { vehicle_id: string; order_ref: string | null },
-      clearActivity: async () => {
-        const counts = check(await sb().rpc('clear_live_activity')) as { messages: number; incidents: number; suggestions: number };
-        // The seeded messages and the system's own incidents stay: read back what is left.
-        const since = new Date(Date.now() - 48 * 3600_000).toISOString();
-        const [is, ss, ms] = await Promise.all([
-          sb().from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
-          sb().from('agent_suggestions').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(400),
-          sb().from('messages').select('*').order('created_at', { ascending: false }).limit(200),
-        ]);
-        setIncidents(check(is));
-        setSuggestions(check(ss));
-        setMessages(check(ms));
-        refreshKpis();
+      resetDemo: async () => {
+        const counts = check(await sb().rpc('reset_demo')) as { messages: number; chat: number; incidents: number; suggestions: number };
+        await loadAll(sb());
         return counts;
       },
       setVehicleStatus: async (vehicleId, s, reason) => {
@@ -333,7 +329,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         setVehicles((m) => new Map(m).set(v.id, v));
       },
     };
-  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online, viewing, refreshKpis]);
+  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online, viewing, refreshKpis, loadAll]);
 
   return <Ctx.Provider value={ops}>{children}</Ctx.Provider>;
 }

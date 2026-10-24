@@ -45,10 +45,12 @@ Nobody writes tables directly except inserting incidents and messages, and colum
 trigger stamp who sent them, from where and with what status, whatever the client sends. Every other
 write is an RPC: `report_position`, `acknowledge_incident`, `assign_incident`, `resolve_incident`,
 `decide_suggestion`, `set_vehicle_status`, `set_user_role`, `mark_message_read`, `simulate_ferry_jam`,
-`clear_live_activity` (any staff member; the "Delete all messages and requests" button on Needs you). It
-deletes only rows created after the seed ran (the cars' `created_at`): messages, the agent's replies,
-incidents a person reported with their agent proposals, and the agent's hotel bookings, whose rooms go
-back on sale. Seeded rows, the system's own tracking-gap incidents and the snapshot tables are never touched.
+`reset_demo` (dispatchers and supervisors; the "Reset demo" button on Needs you). It puts the demo back
+as `seed.sql` left it, with times moved to now: every message sent since the seed, the driver chat, all
+incidents with the agent's proposals, hotel and ferry bookings, the scenarios' sailings, trips, stays and
+market jobs, and the itineraries (rebuilt from the dataset when the driver app opens; road legs come from
+`route_cache`) are removed; cars, drivers' cars and shifts, standby drivers, hotel rooms and the Munich
+pickup site are restored. Users, corridors, the snapshot tables, `route_cache` and the audit log are never touched.
 `anon` can read nothing here (it still reads the v2 snapshot tables, which the live deployment uses).
 
 ### Realtime

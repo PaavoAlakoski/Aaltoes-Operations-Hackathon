@@ -169,7 +169,7 @@ function Room() {
             <button type="button" className={s.button} onClick={simulateTrain} title="Stage the Munich pickup: the driver's ICE is 3 h late and the dealer hands keys over in person only">
               Simulate train delay
             </button>
-            <ClearActivity />
+            <ResetDemo />
           </div>
           {simErr && <p className={s.error} role="alert">{simErr}</p>}
         </section>
@@ -178,9 +178,9 @@ function Room() {
   );
 }
 
-/** Deletes what was sent while testing, after a second click. */
-function ClearActivity() {
-  const { clearActivity } = useOps();
+/** Puts the demo back to its starting point, after a second click. */
+function ResetDemo() {
+  const { resetDemo } = useOps();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -190,8 +190,8 @@ function ClearActivity() {
     setBusy(true);
     setErr(null);
     try {
-      const n = await clearActivity();
-      setDone(`Deleted ${n.messages} messages, ${n.incidents} incidents and ${n.suggestions} agent proposals.`);
+      const n = await resetDemo();
+      setDone(`Demo reset: removed ${n.messages} messages, ${n.chat} chat messages, ${n.incidents} incidents and ${n.suggestions} agent proposals.`);
       setAsking(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -204,18 +204,18 @@ function ClearActivity() {
     return (
       <>
         <button type="button" className={s.danger} onClick={() => { setAsking(true); setDone(null); }}>
-          Delete all messages and requests
+          Reset demo
         </button>
         {done && <p className={s.meta} role="status">{done}</p>}
       </>
     );
   }
   return (
-    <div className={s.confirm} role="alertdialog" aria-label="Delete all messages and requests">
-      <p>Delete the messages and reports sent since the demo data was loaded, with the agent's replies and proposals, for everyone? The original data and automatic tracking alerts stay. This can't be undone.</p>
+    <div className={s.confirm} role="alertdialog" aria-label="Reset demo">
+      <p>Put the demo back to its starting point for everyone? Every message, chat and report sent while testing goes, with the agent's replies, proposals and bookings. Cars, drivers, travel plans and routes return to the original data. This can't be undone.</p>
       <div className={s.inline}>
         <button type="button" className={s.dangerSolid} onClick={() => void run()} disabled={busy}>
-          {busy ? 'Deleting…' : 'Delete everything'}
+          {busy ? 'Resetting…' : 'Reset everything'}
         </button>
         <button type="button" className={s.textButton} onClick={() => setAsking(false)} disabled={busy}>Cancel</button>
       </div>

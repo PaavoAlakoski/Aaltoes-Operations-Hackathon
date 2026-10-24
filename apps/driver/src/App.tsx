@@ -188,8 +188,10 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
         if (row?.id) setIncidents((l) => [row, ...l.filter((x) => x.id !== row.id)]);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vehicles' }, (p) => setVehicle(p.new as Vehicle))
+      // A demo reset deletes it: ask for it again and the function rebuilds it.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'itineraries' }, (p) => {
-        if (p.eventType !== 'DELETE') setItinerary(p.new as unknown as Itinerary);
+        if (p.eventType === 'DELETE') fetchItinerary(db).then(setItinerary);
+        else setItinerary(p.new as unknown as Itinerary);
       })
       // A new ferry booking moves the ferry leg; the function rebuilds when it sees one.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ferry_bookings' }, () => {
@@ -641,6 +643,8 @@ function ChatView({ db, userId }: { db: OpsClient; userId: string }) {
     const ch = db
       .channel(`driver-chat-${++channelSeq}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_chat_messages' }, (p) => add([p.new as ChatMessage]))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'driver_chat_messages' }, (p) =>
+        setChat((l) => l.filter((x) => x.id !== (p.old as ChatMessage).id)))
       .subscribe();
     return () => {
       db.removeChannel(ch);
