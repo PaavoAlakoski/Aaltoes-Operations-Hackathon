@@ -239,6 +239,23 @@ test before anything that touches the queue, the order page or `decide()`.
   at `/` and the driver app at `/driver`. Both read `VITE_SUPABASE_URL` and
   `VITE_SUPABASE_ANON_KEY` from the Vercel project's environment at build time.
 
+### "The app has no Supabase settings"
+
+The app was built without `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+Vite bakes them in at build time, so adding them later only helps after a new
+build.
+
+- **Locally**: copy `apps/control-room/.env.example` to `apps/control-room/.env`
+  (and `apps/driver/.env.example` to `apps/driver/.env`), fill in both values
+  from Supabase (Project Settings > API keys), and restart `npm run dev`.
+- **On Vercel**: open the project > Settings > Environment Variables, add both
+  for Production (and Preview), then Deployments > the latest one > Redeploy.
+  Every Vercel project that builds this repo needs them; a second project made
+  from the same repo starts with none.
+- **Check**: the built bundle should contain your Supabase URL, e.g.
+  `curl -s <site>/ | grep -o '/assets/index-[^"]*\.js'`, then grep that file
+  for `supabase.co`.
+
 ## Demo accounts
 
 Every account below exists on the hosted project and in `supabase/seed.sql`.

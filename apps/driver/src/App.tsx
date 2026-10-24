@@ -51,7 +51,7 @@ export function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (!db) return <Shell><p className="error">Missing Supabase settings. Copy .env.example to .env.</p></Shell>;
+  if (!db) return <Shell><p className="error">The app has no Supabase settings. Locally: copy .env.example to .env, fill it in and restart. On Vercel: add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY under Settings &gt; Environment Variables and redeploy.</p></Shell>;
   if (!ready) return <Shell><p className="meta">Loading…</p></Shell>;
   if (!session) return <SignIn db={db} />;
   return <Driver db={db} userId={session.user.id} />;

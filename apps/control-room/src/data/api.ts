@@ -11,7 +11,7 @@ export const configured = Boolean(url && key);
 const db = configured ? createClient(url!, key!, { auth: { persistSession: false } }) : null;
 
 function client() {
-  if (!db) throw new Error('The app has no Supabase settings. Copy .env.example to .env and fill it in.');
+  if (!db) throw new Error('The app has no Supabase settings. Locally: copy .env.example to .env, fill it in and restart. On Vercel: add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY under Settings > Environment Variables and redeploy.');
   return db;
 }
 
