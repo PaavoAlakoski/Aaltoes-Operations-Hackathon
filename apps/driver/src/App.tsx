@@ -16,6 +16,8 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const db: OpsClient | null = url && key ? createOpsClient(url, key, { storageKey: 'bahn-ops-driver' }) : null;
 
 const SEND_EVERY_MS = 3000;
+/** Makes each realtime channel topic unique (see ChatView). */
+let channelSeq = 0;
 /** A simulated drive covers the corridor fast enough to see it move: ~1.5 km per fix. */
 const SIM_KM_PER_FIX = 1.5;
 
@@ -151,7 +153,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
   // RLS filters these streams to this driver's own rows.
   useEffect(() => {
     const ch = db
-      .channel(`driver-db-${reload}`)
+      .channel(`driver-db-${++channelSeq}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) =>
         setMessages((l) => [p.new as Message, ...l.filter((x) => x.id !== (p.new as Message).id)]))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (p) =>
@@ -366,6 +368,11 @@ function LocationSharing({ db, vehicle, corridor }: { db: OpsClient; vehicle: Ve
     const publisher = new PositionPublisher(db, corridor.id, vehicle.id);
     let watch: number | null = null;
     if (mode === 'gps') {
+      // Browsers only offer location on https or localhost.
+      if (!navigator.geolocation) {
+        setLast({ at: new Date(), stored: false, error: 'Location needs https on this device.' });
+        return () => publisher.close();
+      }
       watch = navigator.geolocation.watchPosition(
         (p) => (fix.current = { lat: p.coords.latitude, lng: p.coords.longitude }),
         (e) => setLast({ at: new Date(), stored: false, error: `Location: ${e.message}` }),
@@ -424,8 +431,10 @@ function ChatView({ db, userId }: { db: OpsClient; userId: string }) {
   useEffect(() => {
     db.from('driver_chat_messages').select('*').eq('driver_id', userId).order('created_at', { ascending: false }).limit(50)
       .then(({ data }) => setChat((data ?? []).reverse()));
+    // A fresh topic each time: removeChannel finishes later, and reusing the old,
+    // still-joined channel makes .on() throw, which blanks the app.
     const ch = db
-      .channel('driver-chat')
+      .channel(`driver-chat-${++channelSeq}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_chat_messages' }, (p) => add([p.new as ChatMessage]))
       .subscribe();
     return () => {
