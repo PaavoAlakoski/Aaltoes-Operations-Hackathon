@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "db:seed": "tsx scripts/seed.ts",
     "attachments:smoke": "tsx scripts/smoke-attachments.ts",
     "smoke": "tsx scripts/smoke.ts",
     "db:generate": "drizzle-kit generate"

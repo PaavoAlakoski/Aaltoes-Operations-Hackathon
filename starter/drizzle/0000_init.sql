@@ -29,25 +29,6 @@ CREATE TABLE "conversations" (
 	"details" jsonb NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "cr_autonomy" (
-	"action_kind" text PRIMARY KEY NOT NULL,
-	"level" text NOT NULL,
-	"updated_by" text NOT NULL,
-	"updated_at" timestamp with time zone NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "cr_decisions" (
-	"id" text PRIMARY KEY NOT NULL,
-	"order_id" text NOT NULL,
-	"target_type" text NOT NULL,
-	"target_id" text NOT NULL,
-	"action" text NOT NULL,
-	"note" text,
-	"decided_by" text NOT NULL,
-	"decided_at" timestamp with time zone NOT NULL,
-	"effects" jsonb NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "customers" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
@@ -161,8 +142,6 @@ ALTER TABLE "related_records" ADD CONSTRAINT "related_records_order_id_orders_id
 ALTER TABLE "sites" ADD CONSTRAINT "sites_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "alerts_order_idx" ON "alerts" USING btree ("order_id");--> statement-breakpoint
 CREATE INDEX "conversations_order_idx" ON "conversations" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "cr_decisions_order_idx" ON "cr_decisions" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "cr_decisions_target_idx" ON "cr_decisions" USING btree ("target_id");--> statement-breakpoint
 CREATE INDEX "messages_conversation_idx" ON "messages" USING btree ("conversation_id","authored_at");--> statement-breakpoint
 CREATE INDEX "events_order_time_idx" ON "operational_events" USING btree ("order_id","recorded_at");--> statement-breakpoint
 CREATE INDEX "order_items_order_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
