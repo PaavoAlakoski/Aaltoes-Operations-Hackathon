@@ -60,7 +60,8 @@ test('approve the empty-pickup proposal, see it decided, then undo it', async ({
   await expect(shift).toContainText('CD-420593');
   await expect(shift).toContainText('Approve');
   await shift.getByRole('button', { name: /Undo Approve on CD-420593/ }).click();
-  await expect(shift).not.toContainText('CD-420593');
+  // The section disappears once nothing is decided, so check the row is gone.
+  await expect(shift.getByText('CD-420593')).toHaveCount(0);
 
   await page.goto('/orders/CD-420593');
   await expect(page.getByRole('article').getByRole('button', { name: 'Approve' })).toBeVisible();
@@ -91,7 +92,7 @@ test('a decision made elsewhere appears without a reload, and so does its undo',
   await page.goto('/');
   await expect(page.getByText('Live', { exact: true })).toBeVisible({ timeout: 15000 });
   const shift = page.getByRole('region', { name: /Decided this shift/ });
-  await expect(shift).not.toContainText('CD-420516');
+  await expect(shift.getByText('CD-420516')).toHaveCount(0);
 
   // Someone else, in another browser, takes the item.
   const made = await request.post(`${api}/rest/v1/rpc/decide`, {
@@ -102,5 +103,5 @@ test('a decision made elsewhere appears without a reload, and so does its undo',
 
   // And undoes it.
   await request.post(`${api}/rest/v1/rpc/undo_decision`, { headers, data: { p_id: ((await made.json()) as { id: string }).id } });
-  await expect(shift).not.toContainText('CD-420516');
+  await expect(shift.getByText('CD-420516')).toHaveCount(0);
 });

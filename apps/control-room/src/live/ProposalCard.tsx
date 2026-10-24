@@ -65,10 +65,12 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide }: {
         ))}
       </ol>
 
-      <footer className={s.proposalFoot}>
-        <span>Total {euros(proposal.totalCents || null)}</span>
-        {done ? <strong className={s.ok}>Recovered: every move is done.</strong> : settled ? <span>Decided</span> : null}
-      </footer>
+      {(proposal.totalCents > 0 || done || settled) && (
+        <footer className={s.proposalFoot}>
+          {proposal.totalCents > 0 ? <span>Total {euros(proposal.totalCents)}</span> : <span />}
+          {done ? <strong className={s.ok}>Recovered: every move is done.</strong> : settled ? <span>Decided</span> : null}
+        </footer>
+      )}
     </section>
   );
 }
@@ -84,6 +86,8 @@ function Move({ move, n, locked, onDecide }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const text = driverText(move);
+  const kind = MOVE_WORD[move.suggestion_type];
+  const title = move.title ?? kind ?? move.suggestion_type;
 
   async function run(decision: 'approve' | 'reject') {
     setBusy(true);
@@ -103,10 +107,10 @@ function Move({ move, n, locked, onDecide }: {
       <span className={s.step} aria-hidden>{move.status === 'executed' ? '✓' : n}</span>
       <div className={s.moveBody}>
         <p className={s.moveTitle}>
-          <span>{move.title ?? MOVE_WORD[move.suggestion_type] ?? move.suggestion_type}</span>
-          <span className={s.cost}>{euros(move.cost_cents)}</span>
+          <span>{title}</span>
+          {move.cost_cents ? <span className={s.cost}>{euros(move.cost_cents)}</span> : null}
         </p>
-        <p className={s.meta}>{MOVE_WORD[move.suggestion_type]} · {STATUS_WORD[move.status]}</p>
+        <p className={s.meta}>{kind && kind !== title ? `${kind} · ` : ''}{STATUS_WORD[move.status]}</p>
         <p>{move.rationale}</p>
         {text && <blockquote className={s.quote}>{text}</blockquote>}
         {move.error && <p className={s.error}>{move.error}</p>}

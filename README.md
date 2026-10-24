@@ -286,8 +286,8 @@ at phone size signed in as Leo (`leo.quellford@demo.bahn.test`). Start
 `npm run simulate` a minute before.
 
 1. **The room (30 s).** Cars move on their corridors in real time: Helsinki to
-   Oulu, the Travemünde ferry, Copenhagen to Hamburg. The KPI strip shows
-   on-time share, open incidents and time to acknowledge. Sign in as Oskar in a
+   Oulu, the Travemünde ferry, Copenhagen to Hamburg. The line under
+   "On the road now" shows on-time share, open incidents and time to acknowledge. Sign in as Oskar in a
    second window and each sees the other on shift, and which incident they
    have open.
 2. **A driver reports (45 s).** In Leo's app tap Report → Traffic or delay,

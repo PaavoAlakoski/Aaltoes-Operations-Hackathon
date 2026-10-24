@@ -27,13 +27,14 @@ export function Agents() {
   if (status === 'loading' || !world) return <Page title="What agents may do"><SkeletonRows rows={4} /></Page>;
 
   const records = agentRecords(world, decisions);
+  // A column that is zero for every agent says nothing.
+  const columns = COLUMNS.filter(([k]) => records.some((r) => r[k] > 0));
   const rows = autonomy.slice().sort((a, b) => Number(b.locked) - Number(a.locked) || a.action_kind.localeCompare(b.action_kind));
 
   return (
     <Page title="What agents may do" meta="Agents do the legwork. People make the judgement calls.">
       <section aria-labelledby="record">
         <h2 id="record" className={s.sectionTitle}>Their record</h2>
-        <p className={s.meta}>From the recorded reviews in the snapshot, plus the decisions made here.</p>
         <ul className={s.agents}>
           {records.map((r) => (
             <li key={r.id} className={s.agent}>
@@ -42,7 +43,7 @@ export function Agents() {
                 <p className={s.meta}>{SCOPE_TEXT[r.scope] ?? humanize(r.scope)}</p>
               </div>
               <dl className={s.numbers}>
-                {COLUMNS.map(([k, label]) => (
+                {columns.map(([k, label]) => (
                   <div key={k} className={s.number}>
                     <dt className={s.meta}>{label}</dt>
                     <dd className={s.value}>{r[k]}</dd>
@@ -56,7 +57,6 @@ export function Agents() {
 
       <section aria-labelledby="autonomy" className={s.section}>
         <h2 id="autonomy" className={s.sectionTitle}>How far they may go</h2>
-        <p className={s.meta}>Start with approvals. Give more freedom as an agent earns trust.</p>
         <ul className={s.levels}>
           {rows.map((row) => <AutonomyLine key={row.action_kind} row={row} />)}
         </ul>

@@ -47,12 +47,6 @@ export function Ref({ children }: { children: ReactNode }) {
   return <span className={`mono ${s.ref}`}>{children}</span>;
 }
 
-export const SOURCE_WORD = { record: 'from the record', agent: 'from the agent', playbook: 'playbook' } as const;
-
-export function SourceTag({ source }: { source: keyof typeof SOURCE_WORD }) {
-  return <span className={s.source} data-source={source}>{SOURCE_WORD[source]}</span>;
-}
-
 /** "Due in 15 min", "Overdue 22 h", "Pickup slot passed 3 h ago", "Promise ends in 2 h". */
 export function clockPhrase(clock: { at: string; what: string } | null, now: string): string | null {
   if (!clock) return null;

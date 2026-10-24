@@ -141,6 +141,10 @@
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
 }
+summary.sectionTitle {
+  cursor: pointer;
+  padding: var(--s2) 0;
+}
 
 .count {
   font-weight: var(--weight-regular);
@@ -248,20 +252,6 @@
   text-decoration-color: var(--line-strong);
 }
 
-.timelineHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.select {
-  padding: 6px var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--bg);
-  cursor: pointer;
-}
 
 .timeline {
   margin-top: var(--s3);
@@ -314,39 +304,6 @@
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
   text-underline-offset: 4px;
-}
-
-.records {
-  margin-top: var(--s6);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-.recordsSummary {
-  font-weight: var(--weight-bold);
-  cursor: pointer;
-  padding: var(--s2) 0;
-}
-
-.recordGroup {
-  margin-top: var(--s2);
-}
-.recordGroup > summary {
-  cursor: pointer;
-  padding: var(--s1) 0;
-}
-
-.pre {
-  margin: var(--s2) 0 0;
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-family: var(--font-mono);
-  font-size: var(--size-meta);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  max-height: 360px;
-  overflow-y: auto;
 }
 
 @media (max-width: 959px) {

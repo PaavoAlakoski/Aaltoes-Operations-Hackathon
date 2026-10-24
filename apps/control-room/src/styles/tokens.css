@@ -5,7 +5,7 @@
   --asphalt: #12110e;
   --sand: #ccc6ba;
   --sand-light: #e6e1d6;
-  --warm-grey: #726958;
+  --warm-grey: #5e5647;
 
   /* Status only */
   --red: #b42c42;
@@ -27,12 +27,12 @@
   --font-title: 'Unbounded', system-ui, sans-serif;
   --font-body: 'Poppins', system-ui, sans-serif;
   --font-mono: 'Reddit Mono', ui-monospace, monospace;
-  --size-title: 22px;
-  --size-body: 14px;
-  --size-meta: 12.5px;
+  --size-title: 24px;
+  --size-body: 15px;
+  --size-meta: 13.5px;
   --weight-regular: 400;
   --weight-bold: 600;
-  --leading: 1.5;
+  --leading: 1.55;
 
   /* 4/8 grid */
   --s1: 4px;

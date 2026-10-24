@@ -43,6 +43,7 @@ export function LiveNow() {
         <h2 id="live-now" className={s.nowTitle}>On the road now</h2>
         {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <OnShift />}
       </div>
+      {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <Kpis />}
       <LiveNowBody />
     </section>
   );
@@ -79,7 +80,6 @@ function SignIn() {
   }
   return (
     <form className={s.signIn} onSubmit={submit}>
-      <p className={s.meta}>Sign in as a dispatcher or supervisor to see the cars moving, incidents as they come in, and talk to drivers.</p>
       <div className={s.signInFields}>
         <label className={s.field}>
           <span>Email</span>
@@ -132,7 +132,6 @@ function Room() {
 
   return (
     <>
-      <KpiStrip />
       <div className={s.grid}>
         <LiveMap corridors={ops.corridors} vehicles={[...vehicles.values()]} flagged={flagged} selectedVehicle={null} onSelect={selectVehicle} />
         <section className={s.queue} aria-label="Incidents">
@@ -169,26 +168,25 @@ function OnShift() {
   return (
     <span className={s.onShift}>
       <span className={s.liveDot} data-live={live} /> {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting…' : 'Not live'}
-      {' · '}{profile?.full_name} ({profile?.role})
-      {others.length > 0 && <> · Also on shift: {others.map((p) => p.name).join(', ')}</>}
+      {' · '}{profile?.full_name}
+      {others.length > 0 && <> · with {others.map((p) => p.name.split(' ')[0]).join(', ')}</>}
       {' · '}<button type="button" className={s.textButton} onClick={signOut}>Sign out</button>
     </span>
   );
 }
 
-function KpiStrip() {
+function Kpis() {
   const { kpis, vehicles } = useOps();
   const moving = [...vehicles.values()].filter((v) => v.status === 'moving' || v.status === 'on_ferry').length;
   const ack = kpis?.avg_ack_seconds;
-  return (
-    <dl className={s.kpis}>
-      <div><dt>On time</dt><dd>{kpis?.on_time_pct != null ? `${kpis.on_time_pct}%` : '–'}</dd></div>
-      <div><dt>Cars on the road</dt><dd>{moving}</dd></div>
-      <div><dt>Open incidents</dt><dd>{kpis?.open_incidents ?? '–'}</dd></div>
-      <div><dt>Waiting for a decision</dt><dd>{kpis?.pending_suggestions ?? '–'}</dd></div>
-      <div><dt>Avg time to acknowledge (24 h)</dt><dd>{ack == null ? '–' : ack < 60 ? `${ack} s` : `${Math.round(ack / 60)} min`}</dd></div>
-    </dl>
-  );
+  const parts = [
+    `${moving} cars on the road`,
+    kpis?.on_time_pct != null && `${kpis.on_time_pct}% on time`,
+    kpis?.open_incidents != null && `${kpis.open_incidents} open`,
+    kpis?.pending_suggestions != null && `${kpis.pending_suggestions} to decide`,
+    ack != null && `${ack < 60 ? `${ack} s` : `${Math.round(ack / 60)} min`} to acknowledge`,
+  ].filter(Boolean);
+  return <p className={s.kpis}>{parts.join(' · ')}</p>;
 }
 
 function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; vehicle: Vehicle | undefined; pending: number }) {
@@ -200,10 +198,10 @@ function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; ve
       <span className={s.sev} data-severity={i.severity} aria-label={`Severity ${i.severity}`} />
       <span className={s.rowMain}>
         <span className={s.rowTitle}>
-          {KIND_WORD[i.kind] ?? i.kind} · {vehicle?.label ?? i.vehicle_id} <span className="mono">{vehicle?.order_ref}</span>
+          {KIND_WORD[i.kind] ?? i.kind} · {vehicle?.label ?? i.vehicle_id} <span className={`mono ${s.ref}`}>{vehicle?.order_ref}</span>
         </span>
         <span className={s.meta}>
-          {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {SOURCE_WORD[i.source]} · {minutesAgo(i.created_at)}
+          {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {minutesAgo(i.created_at)}
           {pending > 0 && <> · <strong className={s.attention}>{pending} to decide</strong></>}
           {watchers.length > 0 && <> · {watchers.map((w) => w.name.split(' ')[0]).join(', ')} looking</>}
         </span>
@@ -307,7 +305,7 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
           <h3 className={s.h2}>{KIND_WORD[i.kind] ?? i.kind}</h3>
           <p className={s.meta}>
             {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'}
-            {' · '}Severity {i.severity} · reported {minutesAgo(i.created_at)} {SOURCE_WORD[i.source]}
+            {' · '}reported {minutesAgo(i.created_at)} {SOURCE_WORD[i.source]}
             {i.assigned_to && <> · with {name(i.assigned_to) ?? 'someone'}</>}
           </p>
           {i.description && <p className={s.description}>{i.description}</p>}

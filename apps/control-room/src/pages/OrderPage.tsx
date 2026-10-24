@@ -4,16 +4,16 @@ import { useEffect, useMemo, useState, useId } from 'react';
 import { Link, useParams } from 'react-router';
 import { useStore } from '../data/store';
 import { attachmentUrl } from '../data/api';
-import { caseView, WHO_LABEL, type TimelineEntry, type Who } from '../domain/caseView';
+import { caseView, WHO_LABEL, type TimelineEntry } from '../domain/caseView';
 import type { AttentionItem } from '../domain/attention';
 import type { Fact } from '../domain/evidence';
 import { evidenceLine } from '../domain/evidenceRefs';
-import { payloadSteps, rechecksBeforeActing, autonomyKinds } from '../domain/proposals';
-import { AUTONOMY_KIND, AUTONOMY_LEVEL, alertStatusLabel, attachmentKindLabel, proposalStatusLabel, humanize } from '../domain/labels';
+import { payloadSteps } from '../domain/proposals';
+import { alertStatusLabel, attachmentKindLabel, proposalStatusLabel } from '../domain/labels';
 import { formatShort, formatTime } from '../domain/clock';
 import type { World } from '../domain/world';
 import { Page } from '../ui/Page';
-import { CertaintyWord, Dot, Ref, SourceTag, When, clockPhrase, deskName, riskTone, isOverdue } from '../ui/bits';
+import { CertaintyWord, Dot, Ref, When, clockPhrase, deskName, riskTone, isOverdue } from '../ui/bits';
 import { DecisionControls, OutcomeList } from '../ui/Decision';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { Icon } from '../ui/Icon';
@@ -114,7 +114,6 @@ export function OrderPage() {
 
         <div className={s.history}>
           <Timeline entries={view.timeline} now={now} />
-          <AllRecords rows={bundle.raw} />
         </div>
 
         <aside className={s.right} aria-label="Facts">
@@ -123,7 +122,7 @@ export function OrderPage() {
             <section key={sec.title} className={s.factSection}>
               <h2 className={s.sectionTitle}>{sec.title}</h2>
               <dl className={s.facts}>
-                {sec.facts.map((f, i) => <FactRow key={i} fact={f} now={now} />)}
+                {sec.facts.map((f, i) => <FactRow key={i} fact={f} />)}
               </dl>
             </section>
           ))}
@@ -141,7 +140,6 @@ export function OrderPage() {
                   </li>
                 ))}
               </ul>
-              <p className={s.meta}>A file shows what was submitted, not what it proves.</p>
             </section>
           )}
         </aside>
@@ -154,7 +152,6 @@ function QuietNote() {
   return (
     <div className={s.quiet}>
       <p className={s.leadTitle}>Nothing needs you on this order.</p>
-      <p className={s.meta}>No open alert, incident, follow-up, thread or agent proposal. That is not the same as verified: the facts on the right show what has actually been checked.</p>
     </div>
   );
 }
@@ -185,25 +182,20 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
       <p className={s.kicker}><Dot tone={p ? 'teal' : riskTone(item.risk)} /> {kicker(item, world)}</p>
       <h2 id="lead-title" className={s.leadTitle}>{item.title}</h2>
       {item.detail && (
-        <p className={s.detail}>
-          {item.detail}
-          <span className={s.meta}> — {p ? (p.status === 'FAILED' ? 'the attempt’s error' : 'the agent’s reasoning') : 'from the record'}</span>
-        </p>
+        <p className={s.detail}>{item.detail}</p>
       )}
 
       {p && p.status !== 'FAILED' && (
         <div className={s.block}>
           <h3 className={s.blockTitle}>{p.status === 'PENDING_REVIEW' ? 'If you approve, the agent' : 'The agent was approved to'}</h3>
           <OutcomeList steps={payloadSteps(p, world)} />
-          {rechecksBeforeActing(p) && <p className={s.meta}>It re-checks the order before acting.</p>}
-          <p className={s.meta}>{autonomyLine(p, world)}</p>
         </div>
       )}
       {p && p.status === 'FAILED' && (
         <div className={s.block}>
           <h3 className={s.blockTitle}>What was attempted</h3>
           <p>{p.summary}</p>
-          <p className={s.meta}>No change is recorded from this attempt. The proposal text alone does not mean anything was booked.</p>
+          <p className={s.meta}>Nothing was changed.</p>
         </div>
       )}
 
@@ -211,7 +203,7 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
         <div className={s.block}>
           <h3 className={s.blockTitle}>What it is based on</h3>
           <dl className={s.facts}>
-            {p.evidence_refs.map((r) => <FactRow key={r.id} fact={evidenceLine(r, item.orderId, world)} now={now} />)}
+            {p.evidence_refs.map((r) => <FactRow key={r.id} fact={evidenceLine(r, item.orderId, world)} />)}
           </dl>
         </div>
       )}
@@ -221,7 +213,7 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
       {!p && (
         <div className={s.block}>
           <h3 className={s.blockTitle}>Next step</h3>
-          <p>{item.next.text} <SourceTag source={item.next.source} /></p>
+          <p>{item.next.text}</p>
           <p className={s.meta}>
             {[clock, item.owner ? deskName(world, item.owner) : 'No owner yet'].filter(Boolean).join(' · ')}
           </p>
@@ -261,20 +253,10 @@ function Photos({ orderId, world }: { orderId: string; world: World }) {
           </li>
         ))}
       </ul>
-      <p className={s.meta}>A photo shows what was submitted. It does not show when or by whom a mark was made.</p>
     </div>
   );
 }
 
-function autonomyLine(p: NonNullable<AttentionItem['proposal']>, world: World): string {
-  void world;
-  const kinds = autonomyKinds(p);
-  const strict = kinds.find((k) => k !== 'read_and_ask') ?? kinds[0]!;
-  const info = AUTONOMY_KIND[strict];
-  if (strict === 'read_and_ask') return 'Reading and asking need no yes; it still waits for you because the proposal holds the order.';
-  if (strict === 'customer_message') return 'Anything for a customer is drafted for you. Nothing reaches them until you send it.';
-  return `${info?.title ?? 'This action'}: ${AUTONOMY_LEVEL.ask_first.toLowerCase()}, so it waits for you.`;
-}
 
 function Folded({ item, world }: { item: AttentionItem; world: World }) {
   const [open, setOpen] = useState(false);
@@ -294,7 +276,7 @@ function Folded({ item, world }: { item: AttentionItem; world: World }) {
           <p className={s.meta}>{kicker(item, world)}{item.owner ? ` · ${deskName(world, item.owner)}` : ''}</p>
           {item.detail && <p className={s.detail}>{item.detail}</p>}
           {item.proposal && item.proposal.status !== 'FAILED' && <OutcomeList steps={payloadSteps(item.proposal, world)} />}
-          {!item.decision && <p>{item.next.text} <SourceTag source={item.next.source} /></p>}
+          {!item.decision && <p>{item.next.text}</p>}
           <DecisionControls item={item} compact />
         </div>
       )}
@@ -302,17 +284,12 @@ function Folded({ item, world }: { item: AttentionItem; world: World }) {
   );
 }
 
-function FactRow({ fact, now }: { fact: Fact; now: string }) {
+function FactRow({ fact }: { fact: Fact }) {
   return (
     <div className={s.fact}>
       <dt className={s.factLabel}>{fact.label}</dt>
       <dd className={s.factValue}>{fact.value}</dd>
-      <dd className={s.factSource}>
-        <CertaintyWord c={fact.certainty} />
-        {fact.by && <span> · {fact.by}</span>}
-        {fact.at && <span> · <When iso={fact.at} now={now} /></span>}
-        {fact.note && <span> · {fact.note}</span>}
-      </dd>
+      {fact.certainty === 'missing' && <dd className={s.factSource}><CertaintyWord c={fact.certainty} /></dd>}
     </div>
   );
 }
@@ -320,70 +297,32 @@ function FactRow({ fact, now }: { fact: Fact; now: string }) {
 const TIMELINE_PAGE = 25;
 
 function Timeline({ entries, now }: { entries: TimelineEntry[]; now: string }) {
-  const [who, setWho] = useState<Who | ''>('');
   const [all, setAll] = useState(false);
-  const present = useMemo(() => [...new Set(entries.map((e) => e.who))], [entries]);
-  const list = entries.filter((e) => !who || e.who === who);
-  const shown = all ? list : list.slice(0, TIMELINE_PAGE);
+  const shown = all ? entries : entries.slice(0, TIMELINE_PAGE);
+  if (entries.length === 0) return null;
   return (
-    <section className={s.section} aria-labelledby="timeline">
-      <div className={s.timelineHead}>
-        <h2 id="timeline" className={s.sectionTitle}>What happened <span className={s.count}>{list.length}</span></h2>
-        <label>
-          <span className="visually-hidden">Show</span>
-          <select value={who} onChange={(e) => setWho(e.target.value as Who | '')} className={s.select}>
-            <option value="">Everyone</option>
-            {present.map((w) => <option key={w} value={w}>{WHO_LABEL[w]}</option>)}
-          </select>
-        </label>
-      </div>
-      {list.length === 0 ? (
-        <p className={s.meta}>Nothing recorded from {who ? WHO_LABEL[who as Who].toLowerCase() : 'anyone'} on this order.</p>
-      ) : (
-        <ol className={s.timeline}>
-          {shown.map((e) => (
-            <li key={e.id} className={s.entry}>
-              <span className={s.entryTime}><When iso={e.at} now={now} /></span>
-              <div className={s.entryBody}>
-                <p className={s.entryWho}>
-                  <span className={s.entryActor}>{e.actor}</span>
-                  <span className={s.meta}> · {WHO_LABEL[e.who]}{e.internal ? ', internal' : ''}</span>
-                </p>
-                <p className={e.kind === 'message' ? s.entryMessage : s.entryText}>{e.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-      {list.length > TIMELINE_PAGE && (
+    <details className={s.section}>
+      <summary className={s.sectionTitle}>What happened <span className={s.count}>{entries.length}</span></summary>
+      <ol className={s.timeline}>
+        {shown.map((e) => (
+          <li key={e.id} className={s.entry}>
+            <span className={s.entryTime}><When iso={e.at} now={now} /></span>
+            <div className={s.entryBody}>
+              <p className={s.entryWho}>
+                <span className={s.entryActor}>{e.actor}</span>
+                <span className={s.meta}> · {WHO_LABEL[e.who]}{e.internal ? ', internal' : ''}</span>
+              </p>
+              <p className={e.kind === 'message' ? s.entryMessage : s.entryText}>{e.text}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {entries.length > TIMELINE_PAGE && (
         <button type="button" className={s.textButton} onClick={() => setAll((a) => !a)}>
-          {all ? 'Show fewer' : `Show all ${list.length}`}
+          {all ? 'Show fewer' : `Show all ${entries.length}`}
         </button>
       )}
-    </section>
-  );
-}
-
-function AllRecords({ rows }: { rows: { collection: string; id: string; data: unknown }[] }) {
-  const grouped = useMemo(() => {
-    const m = new Map<string, { id: string; data: unknown }[]>();
-    for (const r of rows) {
-      const l = m.get(r.collection) ?? [];
-      l.push(r);
-      m.set(r.collection, l);
-    }
-    return [...m].sort(([a], [b]) => a.localeCompare(b));
-  }, [rows]);
-  return (
-    <details className={s.records}>
-      <summary className={s.recordsSummary}>All records <span className={s.count}>{rows.length}</span></summary>
-      <p className={s.meta}>The raw rows behind this page, unchanged from the snapshot.</p>
-      {grouped.map(([collection, list]) => (
-        <details key={collection} className={s.recordGroup}>
-          <summary>{humanize(collection)} <span className={s.count}>{list.length}</span></summary>
-          <pre className={s.pre}>{list.map((r) => JSON.stringify(r.data, null, 2)).join('\n\n')}</pre>
-        </details>
-      ))}
     </details>
   );
 }
+

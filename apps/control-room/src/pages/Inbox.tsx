@@ -6,7 +6,7 @@ import type { InboxThread } from '../domain/types';
 import { pickupSlot, type World } from '../domain/world';
 import type { Triage } from '../domain/triage';
 import { carName, routeLine } from '../domain/caseView';
-import { STAGE_LABEL, categoryLabel, channelLabel, partyLabel, waitingOnLabel } from '../domain/labels';
+import { STAGE_LABEL, categoryLabel, partyLabel, waitingOnLabel } from '../domain/labels';
 import { deriveStage } from '../domain/evidence';
 import { Page } from '../ui/Page';
 import { Ref, When, deskName } from '../ui/bits';
@@ -74,9 +74,9 @@ function Thread({ thread: t, world, triage }: { thread: InboxThread; world: Worl
       <header className={s.threadHead}>
         <p>
           <span className={s.sender}>{sender ?? `A ${partyLabel(t.counterparty_type)}`}</span>
-          <span className={s.meta}> · {partyLabel(t.counterparty_type)} · {channelLabel(t.channel)} · {categoryLabel(t.category)}</span>
+          <span className={s.meta}> · {categoryLabel(t.category)}</span>
         </p>
-        <span className={s.meta}><When iso={t.opened_at} now={now} /> · {deskName(world, t.owner)}</span>
+        <span className={s.meta}><When iso={t.opened_at} now={now} /></span>
       </header>
 
       <ol className={s.messages}>
@@ -92,9 +92,8 @@ function Thread({ thread: t, world, triage }: { thread: InboxThread; world: Worl
       </ol>
 
       <div className={s.basis}>
-        <p className={s.basisTitle}>{t.candidate_order_ids.length ? 'Why these orders might match' : 'Why it isn’t matched'}</p>
+        <p className={s.basisTitle}>{t.candidate_order_ids.length ? 'Why these might match' : 'Why it isn’t matched'}</p>
         <p>{t.candidate_basis}</p>
-        <p className={s.meta}>Stated by the matcher. A guess, not a link.</p>
       </div>
 
       {t.candidate_order_ids.length === 0 ? (

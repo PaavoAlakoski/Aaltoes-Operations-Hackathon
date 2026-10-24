@@ -50,8 +50,8 @@ export function Shell() {
           {world && (
             <span className={s.status}>
               <span className={s.live} data-live={live} aria-live="polite" title={LIVE_HELP[live]}>{LIVE_WORD[live]}</span>
-              <span className={s.clock} title="The data is a frozen snapshot. Every relative time is measured from it.">
-                Snapshot {formatTime(world.snapshotAt)}
+              <span className={s.clock} title={`Frozen snapshot, ${formatTime(world.snapshotAt)}. Relative times on the order screens count from it.`}>
+                Snapshot {formatTime(world.snapshotAt).split(', ').pop()}
               </span>
             </span>
           )}
