@@ -1,0 +1,8 @@
+# The packet's files are checked by hash. Never convert their line endings,
+# whatever core.autocrlf says on the machine that clones this.
+attachments/** -text
+dataset/** -text
+*.pdf binary
+*.jpg binary
+*.png binary
+*.webp binary
