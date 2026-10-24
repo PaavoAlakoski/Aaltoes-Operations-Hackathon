@@ -43,10 +43,10 @@ Nobody writes tables directly except inserting incidents and messages, and colum
 trigger stamp who sent them, from where and with what status, whatever the client sends. Every other
 write is an RPC: `report_position`, `acknowledge_incident`, `assign_incident`, `resolve_incident`,
 `decide_suggestion`, `set_vehicle_status`, `set_user_role`, `mark_message_read`, `simulate_ferry_jam`,
-`clear_live_activity` (any staff member: deletes what was sent while testing, meaning every message except
-the two seeded ones, every incident a driver or control reported with its agent proposals, and the hotel
-rooms the agent booked; the system's own tracking-gap incidents stay. It is the "Delete all messages and
-requests" button on Needs you).
+`clear_live_activity` (any staff member; the "Delete all messages and requests" button on Needs you). It
+deletes only rows created after the seed ran (the cars' `created_at`): messages, the agent's replies,
+incidents a person reported with their agent proposals, and the agent's hotel bookings, whose rooms go
+back on sale. Seeded rows, the system's own tracking-gap incidents and the snapshot tables are never touched.
 `anon` can read nothing here (it still reads the v2 snapshot tables, which the live deployment uses).
 
 ### Realtime

@@ -197,7 +197,7 @@ function ClearActivity() {
   }
   return (
     <div className={s.confirm} role="alertdialog" aria-label="Delete all messages and requests">
-      <p>Delete every message and report sent while testing, with the agent's replies and proposals, for everyone? The starting messages and automatic tracking alerts stay. This can't be undone.</p>
+      <p>Delete the messages and reports sent since the demo data was loaded, with the agent's replies and proposals, for everyone? The original data and automatic tracking alerts stay. This can't be undone.</p>
       <div className={s.inline}>
         <button type="button" className={s.dangerSolid} onClick={() => void run()} disabled={busy}>
           {busy ? 'Deleting…' : 'Delete everything'}

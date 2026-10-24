@@ -108,7 +108,6 @@ insert into public.assignments (driver_id, vehicle_id, shift_start, shift_end, s
   ('10000000-0000-4000-8000-000000000015', 'veh-01024', now() - interval '2 hours', now() + interval '10 hours', 'planned');
 
 -- A little history so the control room is not empty before the simulator runs.
--- clear_live_activity() keeps these two by their exact text: change both together.
 insert into public.messages (from_user, to_corridor, body, created_at) values
   ('20000000-0000-4000-8000-000000000001', 'fi-de-ferry', 'The ferry from Vuosaari is running about 40 minutes late this morning. Plan your arrival at the terminal for that.', now() - interval '35 minutes');
 insert into public.messages (from_user, to_vehicle, body, created_at) values
