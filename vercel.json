@@ -3,7 +3,8 @@
   "services": {
     "control-room": {
       "root": "apps/control-room",
-      "framework": "vite"
+      "framework": "vite",
+      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
     },
     "driver": {
       "root": "apps/driver",
