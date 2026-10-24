@@ -63,7 +63,7 @@ input, textarea {
   padding: 12px; min-height: 48px; color: var(--text); font-size: 16px;
 }
 
-.primary, .tile, .tabs button, .segmented button { cursor: pointer; border-radius: 10px; font-weight: 600; }
+.primary, .tabs button, .segmented button { cursor: pointer; border-radius: 10px; font-weight: 600; }
 .primary { border: 0; background: var(--asphalt); color: var(--birch); padding: 12px 18px; min-height: 48px; }
 .primary:disabled { opacity: 0.5; }
 .big { min-height: 56px; font-size: 18px; }
@@ -81,13 +81,14 @@ a.primary { display: flex; align-items: center; justify-content: center; text-de
   border-radius: 10px; background: var(--red); color: var(--birch); font-size: 12px;
 }
 
-/* Report: big targets, the dangerous ones marked */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.tile {
-  min-height: 92px; border: 1px solid var(--sand); background: var(--bg); font-size: 17px; padding: 12px; text-align: left;
-}
-.tile[data-severity='critical'], .tile[data-severity='high'] { border-color: var(--red); border-width: 2px; }
-.tile:active { background: var(--line); }
-
 .messages { display: grid; gap: 10px; }
 .messages .card[data-mine] { background: var(--line); }
+
+/* Chat: the driver's lines on the right, the assistant's on the left */
+.chat .card { max-width: 88%; }
+.chat .card[data-mine] { justify-self: end; }
+.chat .body { white-space: pre-wrap; }
+.notified {
+  margin-left: 8px; padding: 1px 8px; border-radius: 10px; background: var(--orange); color: var(--birch);
+  font-size: 12px; font-weight: 600;
+}

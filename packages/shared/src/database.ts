@@ -260,6 +260,58 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_chat_messages: {
+        Row: {
+          body: string
+          created_at: string
+          driver_id: string
+          id: string
+          incident_id: string | null
+          role: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          driver_id: string
+          id?: string
+          incident_id?: string | null
+          role: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          driver_id?: string
+          id?: string
+          incident_id?: string | null
+          role?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_chat_messages_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_chat_messages_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_chat_messages_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_stays: {
         Row: {
           address: string

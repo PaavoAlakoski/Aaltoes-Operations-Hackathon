@@ -1,12 +1,13 @@
 // The driver app: one car, one shift. Shows the car and what control sent,
 // shares the car's position (from the phone, or a simulated drive along the
-// corridor), and reports problems with one tap. Row-level security means it
-// can only ever see this driver's own car, messages and reports.
+// corridor), and lets the driver chat with the agent, which tells control only
+// when a problem needs a person. Row-level security means it can only ever see
+// this driver's own car, messages, chat and reports.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   PositionPublisher, createOpsClient, delayPhrase, euros, fractionNear, localTime, pointAlong,
-  type Corridor, type DriverStay, type Incident, type LngLat, type MarketJob, type Message, type OpsClient, type PickupSite,
+  type ChatMessage, type Corridor, type DriverStay, type Incident, type LngLat, type MarketJob, type Message, type OpsClient, type PickupSite,
   type Profile, type Vehicle,
 } from '@bahn/shared';
 
@@ -18,21 +19,12 @@ const SEND_EVERY_MS = 3000;
 /** A simulated drive covers the corridor fast enough to see it move: ~1.5 km per fix. */
 const SIM_KM_PER_FIX = 1.5;
 
-const REPORTS = [
-  { kind: 'breakdown', label: 'Breakdown', severity: 'high' },
-  { kind: 'accident', label: 'Accident', severity: 'critical' },
-  { kind: 'delay', label: 'Traffic or delay', severity: 'medium' },
-  { kind: 'car_not_ready', label: 'Car not ready', severity: 'medium' },
-  { kind: 'documents', label: 'Papers or keys', severity: 'medium' },
-  { kind: 'ferry', label: 'Ferry problem', severity: 'high' },
-  { kind: 'damage', label: 'Damage found', severity: 'high' },
-  { kind: 'other', label: 'Something else', severity: 'low' },
-] as const;
-
-type Report = (typeof REPORTS)[number];
-
-/** Kinds a driver does not report but can see on their car. */
-const OTHER_KIND: Record<string, string> = { tracking_gap: 'Control lost your position' };
+/** What an incident on the driver's car is called in the app. */
+const INCIDENT_LABEL: Record<string, string> = {
+  breakdown: 'Breakdown', accident: 'Accident', delay: 'Traffic or delay', car_not_ready: 'Car not ready',
+  documents: 'Papers or keys', ferry: 'Ferry problem', damage: 'Damage found', other: 'Something else',
+  tracking_gap: 'Control lost your position',
+};
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -106,7 +98,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
   const [stays, setStays] = useState<DriverStay[]>([]);
   const [offers, setOffers] = useState<MarketJob[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'car' | 'report' | 'inbox'>('car');
+  const [tab, setTab] = useState<'car' | 'chat' | 'inbox'>('car');
   // Bumped when control moves this driver onto or off a car.
   const [reload, setReload] = useState(0);
   const carId = useRef<string | null>(null);
@@ -222,7 +214,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
       <p className="hello">Hi {profile.full_name.split(' ')[0]}</p>
       <nav className="tabs" aria-label="Sections">
         <button type="button" aria-pressed={tab === 'car'} onClick={() => setTab('car')}>Car</button>
-        <button type="button" aria-pressed={tab === 'report'} onClick={() => setTab('report')}>Report</button>
+        <button type="button" aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}>Chat</button>
         <button type="button" aria-pressed={tab === 'inbox'} onClick={() => setTab('inbox')}>
           Inbox{unread > 0 && <span className="badge" aria-label={`${unread} unread`}>{unread}</span>}
         </button>
@@ -233,7 +225,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
           <CarView db={db} vehicle={vehicle} corridor={corridor} shift={shift} incidents={incidents} site={site} />
         </div>
       )}
-      {tab === 'report' && <ReportView db={db} vehicle={vehicle} onDone={() => setTab('car')} />}
+      {tab === 'chat' && <ChatView db={db} userId={userId} />}
       {tab === 'inbox' && <Inbox db={db} userId={userId} messages={messages} incidents={incidents} setMessages={setMessages} />}
     </Shell>
   );
@@ -347,7 +339,7 @@ function CarView({ db, vehicle, corridor, shift, incidents, site }: {
           <ul className="list">
             {open.map((i) => (
               <li key={i.id}>
-                <strong>{REPORTS.find((r) => r.kind === i.kind)?.label ?? OTHER_KIND[i.kind] ?? 'Something to check'}</strong>{' '}
+                <strong>{INCIDENT_LABEL[i.kind] ?? 'Something to check'}</strong>{' '}
                 <span className="meta">
                   {i.source === 'driver' ? (i.status === 'acknowledged' ? 'Control has it' : 'Sent, waiting for control') : 'Raised by control'}
                   {' · '}{time(i.created_at)}
@@ -416,46 +408,75 @@ function LocationSharing({ db, vehicle, corridor }: { db: OpsClient; vehicle: Ve
   );
 }
 
-function ReportView({ db, vehicle, onDone }: { db: OpsClient; vehicle: Vehicle; onDone: () => void }) {
-  const [picked, setPicked] = useState<Report | null>(null);
-  const [note, setNote] = useState('');
+/**
+ * The driver's chat with the agent. The agent sorts out what it can and tells
+ * control only about a delay of a day or more, a breakdown, or extra costs.
+ */
+function ChatView({ db, userId }: { db: OpsClient; userId: string }) {
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const end = useRef<HTMLDivElement>(null);
+  const add = (rows: ChatMessage[]) =>
+    setChat((l) => [...l.filter((x) => !rows.some((r) => r.id === x.id)), ...rows].sort((a, b) => a.created_at.localeCompare(b.created_at)));
+
+  useEffect(() => {
+    db.from('driver_chat_messages').select('*').eq('driver_id', userId).order('created_at', { ascending: false }).limit(50)
+      .then(({ data }) => setChat((data ?? []).reverse()));
+    const ch = db
+      .channel('driver-chat')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_chat_messages' }, (p) => add([p.new as ChatMessage]))
+      .subscribe();
+    return () => {
+      db.removeChannel(ch);
+    };
+  }, [db, userId]);
+
+  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [chat.length, busy]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!picked) return;
+    const text = body.trim();
+    if (!text) return;
     setBusy(true);
     setErr(null);
-    const { error } = await db.from('incidents').insert({ vehicle_id: vehicle.id, kind: picked.kind, severity: picked.severity, description: note.trim() });
+    const { data, error } = await db.functions.invoke<{ messages: ChatMessage[] }>('driver-chat', { body: { message: text } });
     setBusy(false);
-    if (error) return setErr(error.message);
-    setSent(true);
-    setTimeout(onDone, 1500);
+    if (error || !data) return setErr('Could not reach the assistant. Try again; if anyone is hurt, call 112.');
+    add(data.messages);
+    setBody('');
   }
 
-  if (sent) return <p className="card ok" role="status">Sent. Control has been told.</p>;
-  if (!picked) {
-    return (
-      <div className="grid" role="group" aria-label="What happened?">
-        {REPORTS.map((r) => (
-          <button key={r.kind} type="button" className="tile" data-severity={r.severity} onClick={() => setPicked(r)}>{r.label}</button>
-        ))}
-      </div>
-    );
-  }
   return (
-    <form className="card stack" onSubmit={send}>
-      <h1 className="title">{picked.label}</h1>
-      {picked.kind === 'accident' && <p className="warn">If anyone is hurt, call 112 first.</p>}
-      <label className="field"><span>Anything control should know? (optional)</span>
-        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-      </label>
-      {err && <p className="error" role="alert">{err}</p>}
-      <button className="primary big" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send to control'}</button>
-      <button className="link" type="button" onClick={() => setPicked(null)}>Back</button>
-    </form>
+    <div className="stack">
+      {chat.length === 0 && (
+        <p className="card meta">
+          Tell the assistant what is going on: traffic, a problem with the car, a question about the pickup. It helps you
+          straight away and tells control when something needs them. If anyone is hurt, call 112 first.
+        </p>
+      )}
+      <ol className="messages chat">
+        {chat.map((m) => (
+          <li key={m.id} className="card" data-mine={m.role === 'driver' || undefined}>
+            <p className="meta">
+              {m.role === 'driver' ? 'You' : 'Assistant'} · {time(m.created_at)}
+              {m.incident_id && <span className="notified">Control notified</span>}
+            </p>
+            <p className="body"><Linked text={m.body} /></p>
+          </li>
+        ))}
+        {busy && <li className="card meta" aria-live="polite">Assistant is thinking…</li>}
+      </ol>
+      <div ref={end} />
+      <form className="card stack" onSubmit={send}>
+        <label className="field"><span>Message</span>
+          <textarea rows={2} value={body} onChange={(e) => setBody(e.target.value)} disabled={busy} required />
+        </label>
+        {err && <p className="error" role="alert">{err}</p>}
+        <button className="primary" type="submit" disabled={busy || !body.trim()}>{busy ? 'Sending…' : 'Send'}</button>
+      </form>
+    </div>
   );
 }
 
@@ -512,7 +533,7 @@ function Inbox({ db, userId, messages, incidents, setMessages }: {
           <button className="primary" type="submit" disabled={!body.trim()}>Send</button>
         </form>
       ) : (
-        <p className="meta">You can reply once someone in control has written to you. To raise something new, use Report.</p>
+        <p className="meta">You can reply once someone in control has written to you. To raise something new, use Chat.</p>
       )}
     </div>
   );

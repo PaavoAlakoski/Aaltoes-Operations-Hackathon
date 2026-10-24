@@ -54,3 +54,7 @@ verify_jwt = false
 
 [functions.pickup-watch]
 verify_jwt = false
+
+# Called by the driver app with the driver's own session.
+[functions.driver-chat]
+verify_jwt = true

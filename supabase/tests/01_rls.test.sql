@@ -9,7 +9,7 @@ set local search_path = public, extensions;
 create temp table tap_out (n serial, line text);
 grant all on tap_out to public;
 grant all on sequence tap_out_n_seq to public;
-insert into tap_out(line) select plan(36);
+insert into tap_out(line) select plan(39);
 
 -- Fixtures: two corridors, a car on each, a driver per car, a dispatcher,
 -- a supervisor, and a signed-up user nobody has set up yet.
@@ -43,6 +43,9 @@ insert into messages (to_user, to_vehicle, to_corridor, body) values
   ('00000000-0000-4000-8000-0000000000d2', null, null, 'to d2'),
   (null, 'test-v2', null, 'to v2'),
   (null, null, 'test-c2', 'to c2');
+insert into driver_chat_messages (driver_id, vehicle_id, role, body) values
+  ('00000000-0000-4000-8000-0000000000d1', 'test-v1', 'driver', 'chat d1'),
+  ('00000000-0000-4000-8000-0000000000d2', 'test-v2', 'driver', 'chat d2');
 
 -- Signs in as a user, with the claims the access token hook would mint.
 create function pg_temp.login(p_user uuid) returns void language plpgsql as $$
@@ -85,6 +88,11 @@ insert into tap_out(line) select results_eq(
   'driver sees messages to them, their car and their corridor, and nothing else');
 insert into tap_out(line) select is_empty('select 1 from agent_suggestions', 'driver sees no agent suggestions');
 insert into tap_out(line) select is_empty('select 1 from audit_log', 'driver sees no audit log');
+insert into tap_out(line) select results_eq($$select body from driver_chat_messages where body like 'chat %'$$, array['chat d1'],
+  'driver sees only their own chat with the agent');
+insert into tap_out(line) select throws_ok(
+  $$insert into driver_chat_messages (driver_id, role, body) values (auth.uid(), 'agent', 'fake reply')$$,
+  '42501', null, 'driver cannot write the chat directly; only the agent function does');
 
 insert into tap_out(line) select lives_ok(
   $$insert into incidents (vehicle_id, kind, description) values ('test-v1', 'breakdown', 'smoke')$$,
@@ -144,6 +152,7 @@ select pg_temp.login('00000000-0000-4000-8000-0000000000a1');
 insert into tap_out(line) select is((select count(*)::int from vehicles where id like 'test-%'), 2, 'dispatcher sees every car');
 insert into tap_out(line) select is((select count(*)::int from incidents where vehicle_id like 'test-%'), 3, 'dispatcher sees every incident, including the one the driver just reported');
 insert into tap_out(line) select isnt_empty('select 1 from agent_suggestions', 'dispatcher sees agent suggestions');
+insert into tap_out(line) select is((select count(*)::int from driver_chat_messages where body like 'chat %'), 2, 'dispatcher sees every driver chat');
 insert into tap_out(line) select lives_ok(
   $$insert into messages (to_corridor, body) values ('test-c2', 'Ferry delayed 2 h')$$,
   'dispatcher messages a corridor');

@@ -1,6 +1,6 @@
 // When can the car's driver be at the pickup, and does that beat the key
-// handover? Shared by pickup-watch (which notices) and agent-triage (which
-// checks again before proposing anything).
+// handover? Shared by pickup-watch (which notices), agent-triage (which
+// checks again before proposing anything) and driver-chat.
 import { driveTime, kmBetween, type Drive } from "./google.ts";
 
 export type PickupContext = {
@@ -91,4 +91,50 @@ export async function computeEta(ctx: PickupContext): Promise<Eta> {
     steps.push(`${site.name} hands keys over ${site.key_handover === "staff_only" ? "in person only" : "(method not recorded)"} until ${hhmm(closes, tz)}: ${in_time ? "in time" : `misses by ${minutes_late} min`}`);
   }
   return { ...base, eta: eta.toISOString(), in_time, minutes_late, basis, steps, drive, ends_at };
+}
+
+// deno-lint-ignore no-explicit-any
+type Db = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: any; error: { message: string } | null }> };
+
+export async function loadPickupContext(db: Db, vehicleId: string): Promise<PickupContext> {
+  const { data, error } = await db.rpc("agent_pickup_context", { p_vehicle_id: vehicleId });
+  if (error) throw new Error(`agent_pickup_context: ${error.message}`);
+  if (!data) throw new Error("no such vehicle");
+  return data as PickupContext;
+}
+
+/** What the check_driver_eta tool returns to a model. */
+export async function driverEtaReport(ctx: PickupContext) {
+  const eta = await computeEta(ctx);
+  const tz = ctx.site?.timezone ?? "Europe/Berlin";
+  return {
+    ...eta,
+    eta_local: eta.eta ? hhmm(eta.eta, tz) : null,
+    closes_local: eta.closes_at ? hhmm(eta.closes_at, tz) : null,
+    timezone: tz,
+    driver_position: ctx.driver ? { lat: ctx.driver.lat, lng: ctx.driver.lng, at: ctx.driver.position_at } : null,
+    trip: ctx.trip,
+  };
+}
+
+/** What the check_key_pickup tool returns to a model. */
+export function keyPickupReport(ctx: PickupContext) {
+  if (!ctx.site) return { error: "No pickup site recorded for this car." };
+  const s = ctx.site;
+  const closes = s.closes_at ? hhmm(s.closes_at, s.timezone) : null;
+  return {
+    site: s.name,
+    city: s.city,
+    opening_hours: s.opening_hours,
+    closes_today_local: closes,
+    closes_at: s.closes_at,
+    key_handover: s.key_handover,
+    after_hours_pickup_possible: s.key_handover === "key_box",
+    access_note: s.access_note,
+    verdict: s.key_handover === "staff_only"
+      ? `Keys are handed over in person by staff, so nothing can be collected after ${closes ?? "closing"}`
+      : s.key_handover === "key_box"
+      ? "A key box allows collection after closing"
+      : "The record does not say how keys are handed over; do not rely on a late collection",
+  };
 }

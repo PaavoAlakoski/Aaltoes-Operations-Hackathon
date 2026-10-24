@@ -11,7 +11,7 @@
 // here can block or undo the incident itself.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { driveTimes, hotelsNear } from "../_shared/google.ts";
-import { computeEta, hhmm, type PickupContext } from "../_shared/pickup.ts";
+import { driverEtaReport, hhmm, keyPickupReport, loadPickupContext, type PickupContext } from "../_shared/pickup.ts";
 
 const MODEL = Deno.env.get("OPENROUTER_MODEL") ?? "anthropic/claude-opus-5.5";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -274,8 +274,7 @@ async function rpc(fn: string, args: Record<string, unknown>) {
 }
 
 async function pickupContext(vehicleId: string, seen: Seen): Promise<PickupContext> {
-  const ctx = (await rpc("agent_pickup_context", { p_vehicle_id: vehicleId })) as PickupContext | null;
-  if (!ctx) throw new Error("no such vehicle");
+  const ctx = await loadPickupContext(db, vehicleId);
   if (ctx.driver) seen.strandedDriverId ??= ctx.driver.id;
   return ctx;
 }
@@ -283,40 +282,10 @@ async function pickupContext(vehicleId: string, seen: Seen): Promise<PickupConte
 // deno-lint-ignore no-explicit-any
 async function runTool(name: string, input: Record<string, any>, seen: Seen, run: Run): Promise<unknown> {
   switch (name) {
-    case "check_driver_eta": {
-      const ctx = await pickupContext(input.vehicle_id, seen);
-      const eta = await computeEta(ctx);
-      const tz = ctx.site?.timezone ?? "Europe/Berlin";
-      return {
-        ...eta,
-        eta_local: eta.eta ? hhmm(eta.eta, tz) : null,
-        closes_local: eta.closes_at ? hhmm(eta.closes_at, tz) : null,
-        timezone: tz,
-        driver_position: ctx.driver ? { lat: ctx.driver.lat, lng: ctx.driver.lng, at: ctx.driver.position_at } : null,
-        trip: ctx.trip,
-      };
-    }
-    case "check_key_pickup": {
-      const ctx = await pickupContext(input.vehicle_id, seen);
-      if (!ctx.site) return { error: "No pickup site recorded for this car." };
-      const s = ctx.site;
-      const closes = s.closes_at ? hhmm(s.closes_at, s.timezone) : null;
-      return {
-        site: s.name,
-        city: s.city,
-        opening_hours: s.opening_hours,
-        closes_today_local: closes,
-        closes_at: s.closes_at,
-        key_handover: s.key_handover,
-        after_hours_pickup_possible: s.key_handover === "key_box",
-        access_note: s.access_note,
-        verdict: s.key_handover === "staff_only"
-          ? `Keys are handed over in person by staff, so nothing can be collected after ${closes ?? "closing"}`
-          : s.key_handover === "key_box"
-          ? "A key box allows collection after closing"
-          : "The record does not say how keys are handed over; do not rely on a late collection",
-      };
-    }
+    case "check_driver_eta":
+      return driverEtaReport(await pickupContext(input.vehicle_id, seen));
+    case "check_key_pickup":
+      return keyPickupReport(await pickupContext(input.vehicle_id, seen));
     case "notify_driver": {
       if (seen.notified) return { error: "Already sent the driver a message for this incident." };
       const body = String(input.message ?? "").trim().slice(0, 2000);

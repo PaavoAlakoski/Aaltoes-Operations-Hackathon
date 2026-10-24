@@ -19,6 +19,7 @@ export type PickupSite = Tables<'pickup_sites'>;
 export type DriverTrip = Tables<'driver_trips'>;
 export type MarketJob = Tables<'market_jobs'>;
 export type DriverStay = Tables<'driver_stays'>;
+export type ChatMessage = Tables<'driver_chat_messages'>;
 
 /** "17:40" in the clock of the place a time refers to. */
 export function localTime(iso: string, timeZone: string): string {
