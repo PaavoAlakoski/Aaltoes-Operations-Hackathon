@@ -1,6 +1,6 @@
 // One order, one decision: what happened, what the agent found or proposes,
 // the evidence, and what happens if you approve, change or reject it.
-import { useMemo, useState, useId } from 'react';
+import { useEffect, useMemo, useState, useId } from 'react';
 import { Link, useParams } from 'react-router';
 import { useStore } from '../data/store';
 import { attachmentUrl } from '../data/api';
@@ -28,6 +28,20 @@ export function OrderPage() {
     if (!world || !triage || !bundle) return null;
     return caseView(bundle, world, triage.allItems.get(bundle.order.id) ?? [], decisions);
   }, [world, triage, bundle, decisions]);
+
+  // The item you are deciding stays in the lead spot after you save, showing
+  // "Decided by you" and an undo, until you leave the order. Without this the
+  // next item would slide into its place mid-decision.
+  const [pinned, setPinned] = useState<{ ref: string; id: string } | null>(null);
+  const pinnedId = pinned?.ref === ref ? pinned.id : view?.lead?.id ?? null;
+  useEffect(() => {
+    if (view?.lead && pinned?.ref !== ref) setPinned({ ref, id: view.lead.id });
+  }, [ref, view, pinned]);
+  const all = view ? [...(view.lead ? [view.lead] : []), ...view.others, ...view.decided] : [];
+  const lead = all.find((i) => i.id === pinnedId) ?? view?.lead ?? null;
+  const open = view ? [...(view.lead ? [view.lead] : []), ...view.others] : [];
+  const others = open.filter((i) => i.id !== lead?.id);
+  const decidedOthers = view ? view.decided.filter((i) => i.id !== lead?.id) : [];
 
   if (status === 'error') return <Page title={ref} width="order"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
   if (status === 'loading' || !world) {
@@ -73,22 +87,22 @@ export function OrderPage() {
 
       <div className={s.grid}>
         <div className={s.left}>
-          {view.lead ? <Lead item={view.lead} world={world} /> : <QuietNote />}
+          {lead ? <Lead key={lead.id} item={lead} world={world} /> : <QuietNote />}
 
-          {view.others.length > 0 && (
+          {others.length > 0 && (
             <section className={s.section} aria-labelledby="also">
-              <h2 id="also" className={s.sectionTitle}>Also open <span className={s.count}>{view.others.length}</span></h2>
+              <h2 id="also" className={s.sectionTitle}>Also open <span className={s.count}>{others.length}</span></h2>
               <ul className={s.folded}>
-                {view.others.map((i) => <Folded key={i.id} item={i} world={world} />)}
+                {others.map((i) => <Folded key={i.id} item={i} world={world} />)}
               </ul>
             </section>
           )}
 
-          {view.decided.length > 0 && (
+          {decidedOthers.length > 0 && (
             <section className={s.section} aria-labelledby="decided">
-              <h2 id="decided" className={s.sectionTitle}>Decided by you <span className={s.count}>{view.decided.length}</span></h2>
+              <h2 id="decided" className={s.sectionTitle}>Decided by you <span className={s.count}>{decidedOthers.length}</span></h2>
               <ul className={s.folded}>
-                {view.decided.map((i) => <Folded key={i.id} item={i} world={world} />)}
+                {decidedOthers.map((i) => <Folded key={i.id} item={i} world={world} />)}
               </ul>
             </section>
           )}
@@ -210,7 +224,7 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
       )}
 
       <div className={s.decide}>
-        <DecisionControls item={item} />
+        <DecisionControls key={item.id} item={item} />
       </div>
     </article>
   );

@@ -6,7 +6,7 @@ import {
   accessFact, bookingFact, boardingFact, cmrFact, contactFact, deriveStage, positionFact, quoteFact, type Fact, type Stage,
 } from './evidence';
 import { decidingClock, isOpen, type AttentionItem, type Clock } from './attention';
-import { leadItem, compareItems } from './triage';
+import { leadItem, compareItems, situationItem } from './triage';
 import {
   STAGE_LABEL, actorLabel, documentKindLabel, documentStatusLabel, eventLabel, proofKindLabel, proofStatusLabel, sourceLabel,
   ACTION_LABEL, signalLabel,
@@ -264,7 +264,7 @@ function headline(b: OrderBundle, world: World, lead: AttentionItem | null, open
     if (stage === 'delivered') return 'Delivered. Nothing is open on this order.';
     return `${STAGE_LABEL[stage]}. Nothing is open; that is not the same as verified.`;
   }
-  const situation = open.filter((i) => i.kind !== 'proposal').sort(compareItems)[0] ?? lead;
+  const situation = situationItem(open) ?? lead;
   const proposal = open.find((i) => i.kind === 'proposal' && i.group === 'decide');
   const first = `${situation.title.replace(/\.$/, '')}.`;
   if (proposal && proposal !== situation) {

@@ -98,8 +98,15 @@
   }
   .nav {
     order: 3;
-    width: 100%;
-    margin: 0 calc(-1 * var(--s3));
+    width: calc(100% + var(--s4));
+    margin: 0 calc(-1 * var(--s2));
+    gap: 0;
+    flex-wrap: nowrap;
+  }
+  .link {
+    padding: var(--s2);
+    gap: var(--s1);
+    white-space: nowrap;
   }
   .main {
     padding-top: var(--s5);

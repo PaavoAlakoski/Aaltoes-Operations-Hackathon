@@ -65,6 +65,14 @@ describe('triage groups', () => {
     expect(t.rows.find((x) => x.reference === 'CD-420299')!.lead.status).toBe('PENDING_REVIEW');
   });
 
+  it('leads the breakdown with the recovery decision, and says what happened in the row', () => {
+    const row = t.rows.find((x) => x.reference === 'CD-420322')!;
+    expect(row.lead.kind).toBe('work_item');
+    expect(row.lead.next.source).toBe('record');
+    expect(row.reason).toBe('Driver stopped: warning light');
+    expect(t.rows.find((x) => x.reference === 'CD-420593')!.reason).toBe('Driver found no car at pickup');
+  });
+
   it('counts a conversation filed on one order for the related order too', () => {
     const items = orderItems(ref('CD-420326'), world);
     expect(items.some((i) => i.kind === 'conversation' && i.id === 'conv-x8f5e0de495c9e7b8')).toBe(true);

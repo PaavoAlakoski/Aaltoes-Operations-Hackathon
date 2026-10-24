@@ -178,7 +178,7 @@ function Row({ row, now }: { row: QueueRow; now: string }) {
           <span className={s.car}>
             <span className={s.carName}>{carName(row.bundle)}</span> <Ref>{row.reference}</Ref>
           </span>
-          <span className={s.reason}>{row.lead.title}{more > 0 && <span className={s.more}> · {more} more open</span>}</span>
+          <span className={s.reason}>{row.reason}{more > 0 && <span className={s.more}> · {more} more open</span>}</span>
           <span className={s.next}>
             {row.next.text} <SourceTag source={row.next.source} />
           </span>

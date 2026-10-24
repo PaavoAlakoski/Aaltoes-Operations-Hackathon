@@ -13,6 +13,8 @@ export interface QueueRow {
   risk: Risk;
   clock: Clock | null;
   lead: AttentionItem;
+  /** What is going on, in one line: the most urgent item that is not a proposal. */
+  reason: string;
   /** The row's next step: the lead's, unless another open item has a recorded one and the lead only has a playbook line. */
   next: NextStep;
   /** Open items only. */
@@ -44,7 +46,20 @@ export function leadItem(items: AttentionItem[]): AttentionItem | undefined {
   const waiting = open.filter((i) => i.kind === 'proposal' && i.group === 'decide');
   const rank = (i: AttentionItem) => (i.status === 'PENDING_REVIEW' ? 0 : 1);
   if (waiting.length) return waiting.slice().sort((a, b) => rank(a) - rank(b) || (b.raisedAt ?? '').localeCompare(a.raisedAt ?? ''))[0];
-  return open.slice().sort(compareItems)[0];
+  const sorted = open.slice().sort(compareItems);
+  const top = sorted[0];
+  // A signal with only a playbook line is not a decision. If an item of about the
+  // same urgency carries a recorded next step, that item is the decision to lead with.
+  if (top && top.next.source === 'playbook') {
+    const recorded = sorted.find((i) => i.group === top.group && i.risk >= top.risk - 1 && i.next.source === 'record' && i.kind !== 'conversation');
+    if (recorded) return recorded;
+  }
+  return top;
+}
+
+/** The situation on an order: the most urgent item that is not an agent proposal. */
+export function situationItem(open: AttentionItem[]): AttentionItem | undefined {
+  return open.filter((i) => i.kind !== 'proposal').sort(compareItems)[0] ?? open.slice().sort(compareItems)[0];
 }
 
 /** Prefer a recorded next step over a playbook line for the same order. */
@@ -74,7 +89,7 @@ export function triage(world: World, decisions: Decision[]): Triage {
     const inGroup = open.filter((i) => i.group === group && i.clock).sort((x, y) => clockMs(x.clock) - clockMs(y.clock));
     rows.push({
       orderId: order.id, reference: order.reference, bundle: b, group, risk,
-      clock: inGroup[0]?.clock ?? lead.clock, lead, items: open, next: rowNextStep(lead, open),
+      clock: inGroup[0]?.clock ?? lead.clock, lead, reason: situationItem(open)!.title, items: open, next: rowNextStep(lead, open),
       owner: lead.owner ?? open.find((i) => i.owner)?.owner ?? null,
     });
   }
