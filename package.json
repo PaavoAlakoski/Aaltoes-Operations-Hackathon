@@ -1,0 +1,18 @@
+{
+  "name": "bahn-control-room-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev:control-room": "npm run dev -w apps/control-room",
+    "dev:driver": "npm run dev -w apps/driver",
+    "simulate": "npm run start -w tools/simulator",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

@@ -1,0 +1,134 @@
+.app {
+  min-height: 100vh;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+.skip:focus {
+  left: var(--s4);
+  top: var(--s2);
+  z-index: 10;
+  background: var(--bg);
+  padding: var(--s2) var(--s3);
+}
+
+.bar {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.barInner {
+  max-width: var(--width-order);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+  min-height: 56px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+}
+
+.brandSub {
+  font-weight: var(--weight-regular);
+  color: var(--text-meta);
+  margin-left: var(--s1);
+}
+
+.nav {
+  display: flex;
+  gap: var(--s1);
+  flex-wrap: wrap;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-meta);
+  transition: background var(--fast) var(--ease);
+}
+.link:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.active {
+  color: var(--text);
+  font-weight: var(--weight-bold);
+}
+
+.count {
+  font-size: var(--size-meta);
+  font-weight: var(--weight-regular);
+  color: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
+.live {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+  white-space: nowrap;
+}
+.live[data-live='offline'] {
+  color: var(--red);
+  font-weight: var(--weight-bold);
+}
+
+.clock {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+  white-space: nowrap;
+}
+
+.main {
+  padding: var(--s6) var(--gutter) var(--s8);
+}
+
+@media (max-width: 719px) {
+  .barInner {
+    gap: 0 var(--s4);
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+  }
+  .brandSub {
+    display: none;
+  }
+  .nav {
+    order: 3;
+    width: calc(100% + var(--s4));
+    margin: 0 calc(-1 * var(--s2));
+    gap: 0;
+    flex-wrap: nowrap;
+    /* Five items do not fit at phone width: scroll the row, not the page. */
+    max-width: calc(100% + var(--s4));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .link {
+    padding: var(--s2);
+    gap: var(--s1);
+    white-space: nowrap;
+  }
+  .main {
+    padding-top: var(--s5);
+  }
+}

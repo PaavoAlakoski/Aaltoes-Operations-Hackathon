@@ -1,0 +1,53 @@
+# Local stack (`npx supabase start`). The hosted project is set up to match;
+# see supabase/README.md for the two settings that live in the dashboard there.
+project_id = "bahn-control-room"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5175"]
+jwt_expiry = 3600
+# Accounts are made by a supervisor (or the seed), not by signing up.
+enable_signup = false
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+# Puts app_role and vehicle_id in every access token.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+
+# Called by database triggers with a shared secret from Vault, not a user JWT.
+[functions.agent-triage]
+verify_jwt = false
+
+[functions.execute-suggestion]
+verify_jwt = false

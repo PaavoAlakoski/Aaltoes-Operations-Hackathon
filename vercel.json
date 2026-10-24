@@ -2,11 +2,19 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
     "control-room": {
-      "root": "control-room",
+      "root": "apps/control-room",
       "framework": "vite"
+    },
+    "driver": {
+      "root": "apps/driver",
+      "framework": "vite",
+      "outputDirectory": "dist",
+      "rewrites": [{ "source": "/driver/(.*)", "destination": "/driver/index.html" }]
     }
   },
+  "redirects": [{ "source": "/driver", "destination": "/driver/", "permanent": false }],
   "rewrites": [
+    { "source": "/driver/(.*)", "destination": { "service": "driver" } },
     { "source": "/(.*)", "destination": { "service": "control-room" } }
   ]
 }

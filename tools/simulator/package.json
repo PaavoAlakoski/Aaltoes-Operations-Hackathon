@@ -1,0 +1,19 @@
+{
+  "name": "@bahn/simulator",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file=../../.env sim.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@bahn/shared": "^0.1.0",
+    "@supabase/supabase-js": "^2.118.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

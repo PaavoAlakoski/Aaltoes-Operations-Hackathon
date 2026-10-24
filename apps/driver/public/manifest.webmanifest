@@ -1,0 +1,9 @@
+{
+  "name": "Bahn Driver",
+  "short_name": "Bahn",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fffef7",
+  "theme_color": "#12110e",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
