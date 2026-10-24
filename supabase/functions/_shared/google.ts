@@ -3,8 +3,8 @@
 // secret. Without it, or when Google refuses a call, drive times fall back to
 // the same estimate the SQL side uses (straight line x 1.25 at 75 km/h) and
 // hotels come back empty. Every result says which source it came from, so
-// the agent can say so. Google is paid per request, so only the demo car
-// (the train-delay scenario) uses it; every other car gets the estimate.
+// the agent can say so. Google is paid per request, so only the demo cars
+// use it; every other car gets the estimate.
 
 export type LatLng = { lat: number; lng: number };
 export type Drive = { minutes: number; km: number; source: "google" | "estimate"; note?: string };
@@ -21,9 +21,13 @@ export type Hotel = {
 
 const key = () => Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 
-/** The one car that asks Google: Elias Halverick's, in simulate_train_delay(). */
-export const GOOGLE_VEHICLE_ID = "veh-01024";
-const NOT_DEMO = "Google is only used for the demo car";
+/**
+ * The cars that ask Google: Elias Halverick's (simulate_train_delay) and Leo
+ * Quellford's (the ferry-miss demo and its itinerary).
+ */
+export const GOOGLE_VEHICLE_IDS = new Set(["veh-01024", "veh-00584"]);
+const NOT_DEMO = "Google is only used for the demo cars";
+const isDemo = (vehicleId: string) => GOOGLE_VEHICLE_IDS.has(vehicleId);
 
 export function kmBetween(a: LatLng, b: LatLng): number {
   const r = (d: number) => (d * Math.PI) / 180;
@@ -41,7 +45,7 @@ const seconds = (d: string | undefined) => Number(String(d ?? "0s").replace("s",
 
 /** Drive time from a to b, leaving at departAt (now if missing or past). */
 export async function driveTime(vehicleId: string, a: LatLng, b: LatLng, departAt?: Date): Promise<Drive> {
-  if (vehicleId !== GOOGLE_VEHICLE_ID) return estimate(a, b, NOT_DEMO);
+  if (!isDemo(vehicleId)) return estimate(a, b, NOT_DEMO);
   if (!key()) return estimate(a, b, "GOOGLE_MAPS_API_KEY is not set");
   const body: Record<string, unknown> = {
     origin: { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
@@ -70,7 +74,7 @@ export async function driveTime(vehicleId: string, a: LatLng, b: LatLng, departA
 export async function driveTimes(vehicleId: string, origins: LatLng[], b: LatLng): Promise<Drive[]> {
   if (origins.length === 0) return [];
   const fallback = (note: string) => origins.map((a) => estimate(a, b, note));
-  if (vehicleId !== GOOGLE_VEHICLE_ID) return fallback(NOT_DEMO);
+  if (!isDemo(vehicleId)) return fallback(NOT_DEMO);
   if (!key()) return fallback("GOOGLE_MAPS_API_KEY is not set");
   try {
     const res = await fetch("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
@@ -96,7 +100,7 @@ export async function driveTimes(vehicleId: string, origins: LatLng[], b: LatLng
 
 /** Hotels within radius metres of a point, nearest first. */
 export async function hotelsNear(vehicleId: string, p: LatLng, radius = 3000): Promise<{ hotels: Hotel[]; source: "google" | "none"; note?: string }> {
-  if (vehicleId !== GOOGLE_VEHICLE_ID) return { hotels: [], source: "none", note: `${NOT_DEMO}, so no hotels could be looked up` };
+  if (!isDemo(vehicleId)) return { hotels: [], source: "none", note: `${NOT_DEMO}, so no hotels could be looked up` };
   if (!key()) return { hotels: [], source: "none", note: "GOOGLE_MAPS_API_KEY is not set, so no hotels could be looked up" };
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
@@ -134,5 +138,81 @@ export async function hotelsNear(vehicleId: string, p: LatLng, radius = 3000): P
     };
   } catch (e) {
     return { hotels: [], source: "none", note: `Places API: ${String(e).slice(0, 200)}` };
+  }
+}
+
+export type RoutePath = { path: [number, number][]; km: number; minutes: number; source: "google" | "estimate"; note?: string };
+
+/** Google's encoded polyline as [lng, lat] pairs. */
+function decodePolyline(encoded: string): [number, number][] {
+  const out: [number, number][] = [];
+  let i = 0, lat = 0, lng = 0;
+  const next = () => {
+    let shift = 0, result = 0, b: number;
+    do {
+      b = encoded.charCodeAt(i++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    return result & 1 ? ~(result >> 1) : result >> 1;
+  };
+  while (i < encoded.length) {
+    lat += next();
+    lng += next();
+    out.push([lng / 1e5, lat / 1e5]);
+  }
+  return out;
+}
+
+/** Keeps a point roughly every minKm along the path, and always the last one. */
+function thin(path: [number, number][], minKm: number): [number, number][] {
+  if (path.length < 3) return path;
+  const kept = [path[0]];
+  for (const p of path.slice(1, -1)) {
+    const last = kept[kept.length - 1];
+    if (kmBetween({ lat: last[1], lng: last[0] }, { lat: p[1], lng: p[0] }) >= minKm) kept.push(p);
+  }
+  kept.push(path[path.length - 1]);
+  return kept;
+}
+
+/**
+ * The road from a to b as a line to draw and drive along. Without traffic, so
+ * it is the cheaper Routes request; callers cache it (route_cache).
+ */
+export async function routePath(vehicleId: string, a: LatLng, b: LatLng): Promise<RoutePath> {
+  const straight = (note: string): RoutePath => {
+    const e = estimate(a, b, note);
+    return { path: [[a.lng, a.lat], [b.lng, b.lat]], km: e.km, minutes: e.minutes, source: "estimate", note };
+  };
+  if (!isDemo(vehicleId)) return straight(NOT_DEMO);
+  if (!key()) return straight("GOOGLE_MAPS_API_KEY is not set");
+  try {
+    const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key(),
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+      },
+      body: JSON.stringify({
+        origin: waypoint(a).waypoint,
+        destination: waypoint(b).waypoint,
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_UNAWARE",
+        polylineQuality: "HIGH_QUALITY",
+      }),
+    });
+    if (!res.ok) return straight(`Routes API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const route = (await res.json()).routes?.[0];
+    if (!route?.polyline?.encodedPolyline) return straight("Routes API found no route");
+    return {
+      path: thin(decodePolyline(route.polyline.encodedPolyline), 0.3),
+      km: Math.round((route.distanceMeters ?? 0) / 100) / 10,
+      minutes: Math.round(seconds(route.duration) / 60),
+      source: "google",
+    };
+  } catch (e) {
+    return straight(`Routes API: ${String(e).slice(0, 200)}`);
   }
 }

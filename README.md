@@ -275,8 +275,11 @@ Drivers sign in to the driver app at `/driver`. Each is on one car:
 | Selma Talverick | `selma.talverick@demo.bahn.test` | Audi Q8 e-tron (`CD-420071`) | Hamburg – Frankfurt – Munich |
 | Elias Halverick | `elias.halverick@demo.bahn.test` | Porsche Macan (`CD-421024`), waiting for pickup | Hamburg – Frankfurt – Munich |
 
-The simulator signs in as all fifteen drivers, so a driver you are using by
-hand will also be moved by it while it runs.
+The simulator signs in as fourteen of the drivers, so a driver you are using
+by hand will also be moved by it while it runs. Leo is left out: his Overview
+shows the whole Cologne → Travemünde → ferry → Helsinki job from the dataset,
+and his "Simulated drive" follows the real road (Google Routes, fetched once
+and cached) at 85 km/h.
 
 ## A 3-minute demo
 

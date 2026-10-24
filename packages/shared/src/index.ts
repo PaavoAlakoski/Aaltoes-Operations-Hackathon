@@ -4,6 +4,7 @@
 // publishable key. The service role key never belongs in a client.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Tables } from './database';
+import type { LngLat } from './position';
 
 export * from './database';
 
@@ -20,6 +21,41 @@ export type DriverTrip = Tables<'driver_trips'>;
 export type MarketJob = Tables<'market_jobs'>;
 export type DriverStay = Tables<'driver_stays'>;
 export type ChatMessage = Tables<'driver_chat_messages'>;
+
+/** One step of a driver's job: getting there, the car's own legs, and home. */
+export type Leg = {
+  id: string;
+  kind: 'train' | 'flight' | 'pickup' | 'drive' | 'ferry' | 'handover';
+  title: string;
+  from: { name: string; lat: number; lng: number };
+  to: { name: string; lat: number; lng: number };
+  /** ISO times; a handover's window is depart_at..arrive_at. */
+  depart_at: string;
+  arrive_at: string;
+  /** Where the times are read: departure, and arrival when it is elsewhere (a flight, the ferry). */
+  timezone: string;
+  arrive_timezone: string;
+  /** What the leg must beat, such as ferry check-in closing. */
+  deadline_at: string | null;
+  /** Driving time without breaks, for drive legs. */
+  minutes: number | null;
+  /** Time kept spare before what comes next, for a late train or ferry. */
+  slack_minutes: number;
+  instructions: string[];
+  link: { label: string; url: string } | null;
+  booking_ref: string | null;
+  status: 'done' | 'now' | 'next';
+  /** How far along a leg in progress is, 0..1. */
+  progress: number;
+  /** Road and sea legs: the line to draw and drive along, [lng, lat]. */
+  path: LngLat[] | null;
+  km: number | null;
+  /** Where the times came from: Google, an estimate, the dataset, or the live booking. */
+  source: 'google' | 'estimate' | 'dataset' | 'booking' | 'plan';
+  /** Dataset records that show a done leg happened. */
+  evidence: string[];
+};
+export type Itinerary = Omit<Tables<'itineraries'>, 'legs'> & { legs: Leg[] };
 
 /**
  * Tells the backend someone has this app open: once a minute while the tab is

@@ -24,10 +24,12 @@ const SPEED = Number(process.env.SIM_SPEED ?? 30); // times real time
 const KMH = 85;
 const INCIDENT_EVERY_S = Number(process.env.SIM_INCIDENT_EVERY_S ?? 240);
 
-// The seeded drivers, by email. Each signs in on its own client.
+// The seeded drivers, by email. Each signs in on its own client. Leo is left
+// out: his car follows its itinerary's real road from the driver app's
+// simulated drive, and two movers would pull it back and forth.
 const DRIVERS = [
   'zoe.bergalund', 'daniel.arelmont', 'sofia.lundervik', 'rafael.rillavik', 'kasper.carvell', 'rafael.venwick',
-  'leo.quellford', 'kasper.kovelund', 'jenna.erdalen', 'william.mervalen', 'nadia.halverick', 'cole.mervalen',
+  'kasper.kovelund', 'jenna.erdalen', 'william.mervalen', 'nadia.halverick', 'cole.mervalen',
   'selma.talverick', 'hanna.wenverin', 'elias.halverick',
 ].map((n) => `${n}@demo.bahn.test`);
 

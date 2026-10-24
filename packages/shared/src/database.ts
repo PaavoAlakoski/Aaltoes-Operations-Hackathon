@@ -681,6 +681,55 @@ export type Database = {
           },
         ]
       }
+      itineraries: {
+        Row: {
+          built_at: string
+          driver_id: string
+          ferry_departure_id: string | null
+          legs: Json
+          shift_seconds: number
+          vehicle_id: string
+        }
+        Insert: {
+          built_at?: string
+          driver_id: string
+          ferry_departure_id?: string | null
+          legs: Json
+          shift_seconds: number
+          vehicle_id: string
+        }
+        Update: {
+          built_at?: string
+          driver_id?: string
+          ferry_departure_id?: string | null
+          legs?: Json
+          shift_seconds?: number
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "itineraries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "itineraries_ferry_departure_id_fkey"
+            columns: ["ferry_departure_id"]
+            isOneToOne: false
+            referencedRelation: "ferry_departures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "itineraries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       market_jobs: {
         Row: {
           delivery_city: string
@@ -952,6 +1001,33 @@ export type Database = {
           data?: Json
           id?: string
           order_id?: string | null
+        }
+        Relationships: []
+      }
+      route_cache: {
+        Row: {
+          fetched_at: string
+          key: string
+          km: number
+          minutes: number
+          path: Json
+          source: string
+        }
+        Insert: {
+          fetched_at?: string
+          key: string
+          km: number
+          minutes: number
+          path: Json
+          source: string
+        }
+        Update: {
+          fetched_at?: string
+          key?: string
+          km?: number
+          minutes?: number
+          path?: Json
+          source?: string
         }
         Relationships: []
       }
