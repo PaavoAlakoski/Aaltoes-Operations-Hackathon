@@ -17,6 +17,7 @@ import { CertaintyWord, Dot, Ref, SourceTag, When, clockPhrase, deskName, riskTo
 import { DecisionControls, OutcomeList } from '../ui/Decision';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { Icon } from '../ui/Icon';
+import { OrderLive } from '../live/Live';
 import s from './OrderPage.module.css';
 
 export function OrderPage() {
@@ -55,6 +56,7 @@ export function OrderPage() {
     return (
       <Page title="Order not found" width="list">
         <Empty title={`There is no order ${ref} in this snapshot.`}><Link to="/orders">See all orders</Link></Empty>
+        <OrderLive reference={ref} />
       </Page>
     );
   }
@@ -84,6 +86,7 @@ export function OrderPage() {
     >
       <Link to="/" className={s.back}><Icon name="back" /> Needs you</Link>
       <p className={s.headline}>{view.headline}</p>
+      <OrderLive reference={h.reference} />
 
       <div className={s.grid}>
         <div className={s.left}>

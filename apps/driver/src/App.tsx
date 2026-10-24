@@ -156,7 +156,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
   if (error) return <Shell onSignOut={signOut}><p className="error">{error}</p></Shell>;
   if (!profile) return <Shell><p className="meta">Loading…</p></Shell>;
   if (profile.role !== 'driver') {
-    return <Shell onSignOut={signOut}><p className="card">This app is for drivers. The control room is at /live in the control room app.</p></Shell>;
+    return <Shell onSignOut={signOut}><p className="card">This app is for drivers. Staff sign in on Needs you in the control room app.</p></Shell>;
   }
   if (!profile.vehicle_id) {
     return <Shell onSignOut={signOut}><p className="card">You are not on a car yet. Control will put you on one.</p></Shell>;

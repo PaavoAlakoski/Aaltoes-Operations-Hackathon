@@ -10,6 +10,8 @@ import { Page } from '../ui/Page';
 import { Dot, Ref, SourceTag, clockPhrase, deskName, isOverdue, riskTone } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { Icon } from '../ui/Icon';
+import { LiveNow } from '../live/Live';
+import { useOps } from '../live/ops';
 import s from './NeedsYou.module.css';
 
 const GROUP_HINT = {
@@ -23,6 +25,7 @@ const SHIFT_MS = 12 * 3600_000;
 
 export function NeedsYou() {
   const { status, error, retry, world, triage, decisions, undo } = useStore();
+  const ops = useOps();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const desk = params.get('desk');
@@ -69,13 +72,17 @@ export function NeedsYou() {
   if (status === 'error') return <Page title="Needs you"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
 
   const decideCount = triage?.byGroup.decide.length ?? 0;
-  const meta = triage ? `${triage.rows.length} orders need a person · ${decideCount} to decide now` : 'Loading the queue…';
+  const incidents = ops.incidents.filter((i) => i.status !== 'resolved').length;
+  const meta = triage
+    ? `${triage.rows.length} orders need a person · ${decideCount} to decide now${incidents ? ` · ${incidents} open incidents on the road` : ''}`
+    : 'Loading the queue…';
   const now = world?.snapshotAt ?? '';
   const since = Date.now() - SHIFT_MS;
   const shift = decisions.filter((d) => !d.undone_at && Date.parse(d.decided_at) >= since);
 
   return (
     <Page title="Needs you" meta={meta}>
+      <LiveNow />
       <div className={s.tools} role="search">
         <label className={s.search}>
           <Icon name="search" />

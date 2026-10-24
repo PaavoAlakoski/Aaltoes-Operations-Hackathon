@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useEffect } from 'react';
 import { useStore } from '../data/store';
+import { useOps } from '../live/ops';
 import { formatTime } from '../domain/clock';
 import s from './Shell.module.css';
 
@@ -9,7 +10,6 @@ const NAV = [
   { to: '/orders', label: 'All orders', end: false },
   { to: '/inbox', label: 'Inbox', end: false },
   { to: '/agents', label: 'Agents', end: false },
-  { to: '/live', label: 'Live ops', end: false },
 ];
 
 const LIVE_WORD = { live: 'Live', connecting: 'Connecting…', offline: 'Not live' } as const;
@@ -26,7 +26,10 @@ export function Shell() {
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  const needs = triage?.rows.length;
+  const ops = useOps();
+  // Open live incidents need a person too, so they count towards Needs you.
+  const incidents = ops.incidents.filter((i) => i.status !== 'resolved').length;
+  const needs = (triage?.rows.length ?? 0) + incidents;
   const unmatched = world?.inboxThreads.filter((t) => t.status === 'OPEN' && t.linked_order_ids.length === 0 && t.link_state !== 'NO_ORDER_REQUIRED').length;
 
   return (

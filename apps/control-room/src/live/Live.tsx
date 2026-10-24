@@ -1,35 +1,60 @@
-// The live operations room: who is on shift, the KPI strip, the map, the
-// incident queue, and the open incident with the agent's proposal and the
-// conversation with the driver. Staff only; drivers use the driver app.
-import { useMemo, useState, type FormEvent } from 'react';
+// Live operations, woven into the other screens. Needs you gets "On the road
+// now": who is on shift, the KPI strip, the map and the incident queue. Each
+// order page gets its car: where it is, its incidents, the agent's proposal
+// and the conversation with the driver. Staff only; drivers use the driver app.
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { delayPhrase, type Incident, type Vehicle } from '@bahn/shared';
-import { Page } from '../ui/Page';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { LiveMap } from './LiveMap';
 import { ProposalCard } from './ProposalCard';
-import { OpsProvider, opsConfigured, useOps } from './ops';
+import { opsConfigured, useOps } from './ops';
 import s from './live.module.css';
 
-export function LivePage() {
+const KIND_WORD: Record<string, string> = {
+  breakdown: 'Breakdown', accident: 'Accident', delay: 'Delay', car_not_ready: 'Car not ready', documents: 'Documents',
+  ferry: 'Ferry', tracking_gap: 'No position', damage: 'Damage', other: 'Other',
+};
+const SOURCE_WORD = { driver: 'from the driver', control: 'from control', agent: 'from the agent', system: 'from the system' } as const;
+const STATUS_WORD: Record<Vehicle['status'], string> = {
+  waiting_pickup: 'Waiting for pickup', moving: 'On the road', on_ferry: 'On the ferry', stopped: 'Stopped',
+  needs_check: 'Needs a check', delivered: 'Delivered', offline: 'No signal',
+};
+
+function minutesAgo(iso: string): string {
+  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
+}
+
+/** Where an incident is worked on: its car's order page. */
+function orderPath(vehicle: Vehicle | undefined, incidentId?: string): string | null {
+  if (!vehicle?.order_ref) return null;
+  return `/orders/${vehicle.order_ref}${incidentId ? `?incident=${incidentId}` : ''}`;
+}
+
+// ---------------------------------------------------------------- Needs you
+
+export function LiveNow() {
+  const ops = useOps();
+  if (!opsConfigured) return null;
   return (
-    <OpsProvider>
-      <Gate />
-    </OpsProvider>
+    <section className={s.now} aria-labelledby="live-now">
+      <div className={s.nowHead}>
+        <h2 id="live-now" className={s.nowTitle}>On the road now</h2>
+        {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <OnShift />}
+      </div>
+      <LiveNowBody />
+    </section>
   );
 }
 
-function Gate() {
+function LiveNowBody() {
   const ops = useOps();
-  if (!opsConfigured) return <Page title="Live operations"><ErrorState message="The app has no Supabase settings. Copy .env.example to .env and fill it in." /></Page>;
   if (ops.status === 'signed-out') return <SignIn />;
-  if (ops.status === 'error') return <Page title="Live operations"><ErrorState message={ops.error ?? 'Unknown error'} /></Page>;
-  if (ops.status === 'loading' || !ops.profile) return <Page title="Live operations"><SkeletonRows rows={5} /></Page>;
+  if (ops.status === 'error') return <ErrorState message={ops.error ?? 'Unknown error'} />;
+  if (ops.status === 'loading' || !ops.profile) return <SkeletonRows rows={3} label="Loading live operations" />;
   if (ops.profile.role === 'driver') {
-    return (
-      <Page title="Live operations">
-        <Empty title="This is the control room.">Drivers use the driver app. <button type="button" className={s.textButton} onClick={ops.signOut}>Sign out</button></Empty>
-      </Page>
-    );
+    return <Empty title="This is the control room.">Drivers use the driver app. <button type="button" className={s.textButton} onClick={ops.signOut}>Sign out</button></Empty>;
   }
   return <Room />;
 }
@@ -53,8 +78,9 @@ function SignIn() {
     }
   }
   return (
-    <Page title="Live operations" meta="Sign in as a dispatcher or supervisor.">
-      <form className={s.signIn} onSubmit={submit}>
+    <form className={s.signIn} onSubmit={submit}>
+      <p className={s.meta}>Sign in as a dispatcher or supervisor to see the cars moving, incidents as they come in, and talk to drivers.</p>
+      <div className={s.signInFields}>
         <label className={s.field}>
           <span>Email</span>
           <input className={s.input} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -63,34 +89,23 @@ function SignIn() {
           <span>Password</span>
           <input className={s.input} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
-        {err && <p className={s.error} role="alert">{err}</p>}
         <button type="submit" className={s.primary} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      </form>
-    </Page>
+      </div>
+      {err && <p className={s.error} role="alert">{err}</p>}
+    </form>
   );
-}
-
-const KIND_WORD: Record<string, string> = {
-  breakdown: 'Breakdown', accident: 'Accident', delay: 'Delay', car_not_ready: 'Car not ready', documents: 'Documents',
-  ferry: 'Ferry', tracking_gap: 'No position', damage: 'Damage', other: 'Other',
-};
-const SOURCE_WORD = { driver: 'from the driver', control: 'from control', agent: 'from the agent', system: 'from the system' } as const;
-
-function minutesAgo(iso: string): string {
-  const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
-  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
 }
 
 function Room() {
   const ops = useOps();
-  const { incidents, vehicles, proposals, viewing, setViewing } = ops;
+  const { incidents, vehicles, proposals } = ops;
+  const navigate = useNavigate();
   const [showResolved, setShowResolved] = useState(false);
   const [simErr, setSimErr] = useState<string | null>(null);
 
   const open = incidents.filter((i) => i.status !== 'resolved');
   const shown = showResolved ? incidents : open;
   const flagged = useMemo(() => new Set(open.map((i) => i.vehicle_id)), [open]);
-  const selected = incidents.find((i) => i.id === viewing) ?? null;
   const pendingByIncident = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of proposals) m.set(p.incidentId, (m.get(p.incidentId) ?? 0) + p.moves.filter((x) => x.status === 'pending').length);
@@ -98,47 +113,31 @@ function Room() {
   }, [proposals]);
 
   function selectVehicle(vehicleId: string) {
+    const v = vehicles.get(vehicleId);
     const latest = open.find((i) => i.vehicle_id === vehicleId);
-    if (latest) setViewing(latest.id);
+    const to = orderPath(v, latest?.id);
+    if (to) navigate(to);
   }
 
   async function simulate() {
     setSimErr(null);
     try {
       const row = await ops.simulateFerryJam();
-      setViewing(row.id);
+      const to = orderPath(ops.vehicles.get(row.vehicle_id), row.id);
+      if (to) navigate(to);
     } catch (e) {
       setSimErr(e instanceof Error ? e.message : String(e));
     }
   }
 
   return (
-    <Page
-      title="Live operations"
-      width="order"
-      meta={<OnShift />}
-      actions={
-        <>
-          <button type="button" className={s.button} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
-            Simulate ferry traffic jam
-          </button>
-          <button type="button" className={s.textButton} onClick={ops.signOut}>Sign out</button>
-        </>
-      }
-    >
-      {simErr && <p className={s.error} role="alert">{simErr}</p>}
+    <>
       <KpiStrip />
       <div className={s.grid}>
-        <LiveMap
-          corridors={ops.corridors}
-          vehicles={[...vehicles.values()]}
-          flagged={flagged}
-          selectedVehicle={selected?.vehicle_id ?? null}
-          onSelect={selectVehicle}
-        />
+        <LiveMap corridors={ops.corridors} vehicles={[...vehicles.values()]} flagged={flagged} selectedVehicle={null} onSelect={selectVehicle} />
         <section className={s.queue} aria-label="Incidents">
           <div className={s.queueHead}>
-            <h2 className={s.h2}>Incidents</h2>
+            <h3 className={s.h2}>Incidents</h3>
             <label className={s.toggle}>
               <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} /> Show resolved
             </label>
@@ -148,26 +147,31 @@ function Room() {
           ) : (
             <ul className={s.list}>
               {shown.map((i) => (
-                <IncidentRow key={i.id} incident={i} vehicle={vehicles.get(i.vehicle_id)} pending={pendingByIncident.get(i.id) ?? 0}
-                  active={i.id === viewing} onOpen={() => setViewing(i.id === viewing ? null : i.id)} />
+                <IncidentRow key={i.id} incident={i} vehicle={vehicles.get(i.vehicle_id)} pending={pendingByIncident.get(i.id) ?? 0} />
               ))}
             </ul>
           )}
+          <div className={s.queueFoot}>
+            <button type="button" className={s.button} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
+              Simulate ferry traffic jam
+            </button>
+          </div>
+          {simErr && <p className={s.error} role="alert">{simErr}</p>}
         </section>
       </div>
-      {selected ? <IncidentDetail incident={selected} /> : <Empty title="Open an incident to see the agent's proposal and talk to the driver." />}
-    </Page>
+    </>
   );
 }
 
 function OnShift() {
-  const { online, profile, live } = useOps();
+  const { online, profile, live, signOut } = useOps();
   const others = online.filter((p) => p.user_id !== profile?.id);
   return (
     <span className={s.onShift}>
       <span className={s.liveDot} data-live={live} /> {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting…' : 'Not live'}
-      {' · '}Signed in as {profile?.full_name} ({profile?.role})
+      {' · '}{profile?.full_name} ({profile?.role})
       {others.length > 0 && <> · Also on shift: {others.map((p) => p.name).join(', ')}</>}
+      {' · '}<button type="button" className={s.textButton} onClick={signOut}>Sign out</button>
     </span>
   );
 }
@@ -187,40 +191,102 @@ function KpiStrip() {
   );
 }
 
-function IncidentRow({ incident: i, vehicle, pending, active, onOpen }: {
-  incident: Incident; vehicle: Vehicle | undefined; pending: number; active: boolean; onOpen: () => void;
-}) {
+function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; vehicle: Vehicle | undefined; pending: number }) {
   const { online, profile } = useOps();
   const watchers = online.filter((p) => p.viewing_incident === i.id && p.user_id !== profile?.id);
-  return (
-    <li>
-      <button type="button" className={s.row} data-active={active || undefined} data-severity={i.severity} onClick={onOpen} aria-expanded={active}>
-        <span className={s.sev} data-severity={i.severity} aria-label={`Severity ${i.severity}`} />
-        <span className={s.rowMain}>
-          <span className={s.rowTitle}>
-            {KIND_WORD[i.kind] ?? i.kind} · {vehicle?.label ?? i.vehicle_id} <span className="mono">{vehicle?.order_ref}</span>
-          </span>
-          <span className={s.meta}>
-            {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {SOURCE_WORD[i.source]} · {minutesAgo(i.created_at)}
-            {pending > 0 && <> · <strong className={s.attention}>{pending} to decide</strong></>}
-            {watchers.length > 0 && <> · {watchers.map((w) => w.name.split(' ')[0]).join(', ')} looking</>}
-          </span>
+  const to = orderPath(vehicle, i.id);
+  const body = (
+    <>
+      <span className={s.sev} data-severity={i.severity} aria-label={`Severity ${i.severity}`} />
+      <span className={s.rowMain}>
+        <span className={s.rowTitle}>
+          {KIND_WORD[i.kind] ?? i.kind} · {vehicle?.label ?? i.vehicle_id} <span className="mono">{vehicle?.order_ref}</span>
         </span>
-      </button>
-    </li>
+        <span className={s.meta}>
+          {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {SOURCE_WORD[i.source]} · {minutesAgo(i.created_at)}
+          {pending > 0 && <> · <strong className={s.attention}>{pending} to decide</strong></>}
+          {watchers.length > 0 && <> · {watchers.map((w) => w.name.split(' ')[0]).join(', ')} looking</>}
+        </span>
+      </span>
+    </>
+  );
+  return <li>{to ? <Link to={to} className={s.row} data-severity={i.severity}>{body}</Link> : <div className={s.row}>{body}</div>}</li>;
+}
+
+// --------------------------------------------------------------- Order page
+
+/** The car behind this order, live. Renders nothing when there is none or nobody is signed in. */
+export function OrderLive({ reference }: { reference: string }) {
+  const ops = useOps();
+  const [params, setParams] = useSearchParams();
+  const vehicle = useMemo(
+    () => [...ops.vehicles.values()].find((v) => v.order_ref?.toUpperCase() === reference.toUpperCase()),
+    [ops.vehicles, reference],
+  );
+  const incidents = vehicle ? ops.incidents.filter((i) => i.vehicle_id === vehicle.id) : [];
+  const asked = params.get('incident');
+  const selected = incidents.find((i) => i.id === asked) ?? incidents.find((i) => i.status !== 'resolved') ?? null;
+
+  // Tell the rest of the room which incident this person is looking at.
+  const { setViewing } = ops;
+  useEffect(() => {
+    setViewing(selected?.id ?? null);
+    return () => setViewing(null);
+  }, [selected?.id, setViewing]);
+
+  if (!opsConfigured || ops.status !== 'ready' || !ops.profile || ops.profile.role === 'driver' || !vehicle) return null;
+
+  const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
+  const pick = (id: string) => {
+    const next = new URLSearchParams(params);
+    next.set('incident', id);
+    setParams(next, { replace: true });
+  };
+
+  return (
+    <section className={s.orderLive} aria-labelledby="order-live">
+      <div className={s.nowHead}>
+        <h2 id="order-live" className={s.nowTitle}>
+          <span className={s.liveDot} data-live={ops.live} /> Live
+        </h2>
+        <p className={s.meta}>
+          {STATUS_WORD[vehicle.status] ?? vehicle.status}
+          {vehicle.status !== 'waiting_pickup' && <> · {delayPhrase(vehicle.delay_seconds)}</>}
+          {driver && <> · {driver.full_name}</>}
+          {vehicle.registration && <> · <span className="mono">{vehicle.registration}</span></>}
+          {vehicle.last_seen_at && <> · position {minutesAgo(vehicle.last_seen_at)}</>}
+        </p>
+      </div>
+
+      {incidents.length > 1 && (
+        <ul className={s.tabs} aria-label="Incidents on this car">
+          {incidents.map((i) => (
+            <li key={i.id}>
+              <button type="button" className={s.tab} aria-pressed={i.id === selected?.id} onClick={() => pick(i.id)}>
+                <span className={s.sev} data-severity={i.severity} /> {KIND_WORD[i.kind] ?? i.kind} · {i.status === 'resolved' ? 'resolved' : minutesAgo(i.created_at)}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {selected ? (
+        <IncidentDetail incident={selected} vehicle={vehicle} />
+      ) : (
+        <div className={s.detailGrid}>
+          <p className={s.meta}>No incident on this car. Anything the driver, the system or the agent raises shows here as it happens.</p>
+          <Thread vehicle={vehicle} incident={null} driverName={driver?.full_name} />
+        </div>
+      )}
+    </section>
   );
 }
 
-function IncidentDetail({ incident: i }: { incident: Incident }) {
+function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle: Vehicle }) {
   const ops = useOps();
-  const vehicle = ops.vehicles.get(i.vehicle_id);
   const staff = ops.staff.filter((p) => p.role !== 'driver');
-  const driver = ops.staff.find((p) => p.vehicle_id === i.vehicle_id && p.role === 'driver');
+  const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
   const proposals = ops.proposals.filter((p) => p.incidentId === i.id);
-  const thread = ops.messages
-    .filter((m) => m.incident_id === i.id || m.to_vehicle === i.vehicle_id || (driver && (m.from_user === driver.id || m.to_user === driver.id)))
-    .slice(0, 20)
-    .reverse();
   const [note, setNote] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const name = (id: string | null) => ops.staff.find((p) => p.id === id)?.full_name;
@@ -238,9 +304,9 @@ function IncidentDetail({ incident: i }: { incident: Incident }) {
     <article className={s.detail} aria-label="Incident">
       <header className={s.detailHead}>
         <div>
-          <h2 className={s.h2}>{KIND_WORD[i.kind] ?? i.kind}: {vehicle?.label} <span className="mono">{vehicle?.order_ref}</span></h2>
+          <h3 className={s.h2}>{KIND_WORD[i.kind] ?? i.kind}</h3>
           <p className={s.meta}>
-            {driver ? `${driver.full_name} · ` : ''}{vehicle ? (vehicle.status === 'waiting_pickup' ? 'Waiting for pickup' : delayPhrase(vehicle.delay_seconds)) : ''}
+            {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'}
             {' · '}Severity {i.severity} · reported {minutesAgo(i.created_at)} {SOURCE_WORD[i.source]}
             {i.assigned_to && <> · with {name(i.assigned_to) ?? 'someone'}</>}
           </p>
@@ -280,27 +346,32 @@ function IncidentDetail({ incident: i }: { incident: Incident }) {
             ))
           )}
         </div>
-        <Thread incident={i} thread={thread} driverName={driver?.full_name} />
+        <Thread vehicle={vehicle} incident={i} driverName={driver?.full_name} />
       </div>
     </article>
   );
 }
 
-function Thread({ incident, thread, driverName }: { incident: Incident; thread: ReturnType<typeof useOps>['messages']; driverName?: string }) {
+function Thread({ vehicle, incident, driverName }: { vehicle: Vehicle; incident: Incident | null; driverName?: string }) {
   const ops = useOps();
   const [body, setBody] = useState('');
   const [toCorridor, setToCorridor] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const vehicle = ops.vehicles.get(incident.vehicle_id);
+  const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
+  const thread = ops.messages
+    .filter((m) => (incident && m.incident_id === incident.id) || m.to_vehicle === vehicle.id || (driver && (m.from_user === driver.id || m.to_user === driver.id)))
+    .slice(0, 20)
+    .reverse();
   const who = (id: string | null) => (id ? ops.staff.find((p) => p.id === id)?.full_name ?? 'Someone' : 'Agent');
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setErr(null);
+    const incident_id = incident?.id ?? null;
     try {
-      await ops.send(toCorridor && vehicle
-        ? { to_corridor: vehicle.corridor_id, incident_id: incident.id, body }
-        : { to_vehicle: incident.vehicle_id, incident_id: incident.id, body });
+      await ops.send(toCorridor
+        ? { to_corridor: vehicle.corridor_id, incident_id, body }
+        : { to_vehicle: vehicle.id, incident_id, body });
       setBody('');
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));

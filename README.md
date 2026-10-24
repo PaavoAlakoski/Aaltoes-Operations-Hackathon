@@ -44,7 +44,8 @@ to it.
 - The control room web app (v2, deployed): queue, order page, inbox, agents
   and autonomy, all orders. Described in detail in
   `apps/control-room/README.md`.
-- **Live operations** (`/live` in the control room): cars moving on a map,
+- **Live operations** (inside the control room: the map, KPIs and incident
+  queue on Needs you, each car's incidents and driver chat on its order page): cars moving on a map,
   incidents from drivers and the system, and a helper agent that looks into
   each incident and proposes moves (for a missed ferry: rebook the sailing,
   book the driver a hotel), each approved or rejected by a person.
@@ -68,7 +69,7 @@ to it.
 
 | Path | What it is |
 | --- | --- |
-| `apps/control-room/` | The control room (v2 and `/live`): Vite, React 19, strict TypeScript, React Router, plain CSS, Supabase, Leaflet. Deployed at `/`. |
+| `apps/control-room/` | The control room (v2 with live operations): Vite, React 19, strict TypeScript, React Router, plain CSS, Supabase, Leaflet. Deployed at `/`. |
 | `apps/driver/` | The driver app: Vite, React 19, a phone-first PWA. Deployed at `/driver`. |
 | `packages/shared/` | Generated database types, the Supabase client, realtime channel names, position publishing. |
 | `tools/simulator/` | Signs in as each demo driver and moves the fleet; adds delays and random incidents. |
@@ -124,7 +125,7 @@ How the pieces fit:
 ```mermaid
 flowchart LR
   subgraph Clients
-    CR["Control room /live<br/>dispatchers, supervisors"]
+    CR["Control room<br/>dispatchers, supervisors"]
     DR["Driver app /driver"]
     SIM["Simulator<br/>signs in as each driver"]
   end
@@ -171,7 +172,7 @@ These come from `dataset/SCHEMA.md` and the brief. Breaking one is a bug.
 
 - **The clock is frozen** at `dataset/data/manifest.json`'s `snapshot_at` on
   the snapshot screens. Every "in 2 h" or "3 h ago" there is measured from it,
-  never from the real clock. Live operations (`/live`, the driver app, the
+  never from the real clock. Live operations (the live blocks in the control room, the driver app, the
   agent) run on the real clock.
 - **Evidence:** a quote is not a booking, and a booking is not a boarding. An
   acknowledged alert is still open. A message is a claim by its speaker.
@@ -197,7 +198,7 @@ the same folders, and `.env.example` to `.env` at the root (for the simulator).
 Then, each in its own terminal:
 
 ```sh
-npm run dev:control-room      # http://localhost:5173  (/live for operations)
+npm run dev:control-room      # http://localhost:5173  (sign in on Needs you for live operations)
 npm run dev:driver            # http://localhost:5175
 npm run simulate              # moves the fleet; Ctrl+C to stop
 ```
@@ -246,7 +247,7 @@ password is not written here: ask the team, or read `DEMO_PASSWORD` in the
 root `.env` on a machine that has it. On a local stack the password is
 `bahn-demo-local`.
 
-Staff sign in to the control room at `/live`:
+Staff sign in to the control room on Needs you (the "On the road now" block):
 
 | Role | Name | Email |
 | --- | --- | --- |
@@ -279,7 +280,7 @@ hand will also be moved by it while it runs.
 
 ## A 3-minute demo
 
-Two windows side by side: the control room at `/live` signed in as a
+Two windows side by side: the control room's Needs you signed in as a
 dispatcher (`mira.kestelund@demo.bahn.test`), and the driver app at `/driver`
 at phone size signed in as Leo (`leo.quellford@demo.bahn.test`). Start
 `npm run simulate` a minute before.
@@ -290,8 +291,8 @@ at phone size signed in as Leo (`leo.quellford@demo.bahn.test`). Start
    second window and each sees the other on shift, and which incident they
    have open.
 2. **A driver reports (45 s).** In Leo's app tap Report → Traffic or delay,
-   type "Stau on the A1", send. It appears at the top of Mira's queue. Within
-   half a minute the agent's proposal is in: what it checked, and one or two
+   type "Stau on the A1", send. It appears at the top of Mira's incident queue;
+   click it to open the car's order page. Within half a minute the agent's proposal is in: what it checked, and one or two
    moves. Approve the message: it arrives in Leo's inbox.
 3. **The ferry miss (75 s).** Click **Simulate ferry traffic jam**. Leo's
    Bentley is in a Stau near Bargteheide, booked on tonight's sailing from

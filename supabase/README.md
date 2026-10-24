@@ -1,6 +1,6 @@
 # Supabase: the operations backend
 
-One Supabase project serves three clients: the control room (`apps/control-room`, route `/live`),
+One Supabase project serves three clients: the control room (`apps/control-room`),
 the driver app (`apps/driver`) and the helper agent (`functions/agent-triage`,
 `functions/execute-suggestion`). Everything here is code: migrations, seed, tests, functions.
 
