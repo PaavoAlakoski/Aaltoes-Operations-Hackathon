@@ -6,6 +6,10 @@
   max-width: var(--width-order);
 }
 
+.back {
+  margin-bottom: var(--s2);
+}
+
 .head {
   display: flex;
   align-items: flex-end;

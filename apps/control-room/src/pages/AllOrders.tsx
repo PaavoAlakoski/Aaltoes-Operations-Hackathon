@@ -97,7 +97,7 @@ export function AllOrders() {
           <tbody>
             {sorted.map(({ b, h, car, open }) => (
               <tr key={b.order.id}>
-                <td data-label="Order"><Link to={`/orders/${h.reference}`} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
+                <td data-label="Order"><Link to={`/orders/${h.reference}`} state={{ from: '/orders' }} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
                 <td data-label="Car"><span className={s.car}>{car}</span><span className={s.route}>{h.route}</span></td>
                 <td data-label="Customer" className={s.meta}>{h.customer}</td>
                 <td data-label="Stage">{h.stageLabel}</td>

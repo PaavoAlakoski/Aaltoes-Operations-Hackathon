@@ -2,11 +2,13 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import s from './Page.module.css';
 
-export function Page({ title, meta, width = 'list', children, actions }: {
+export function Page({ title, meta, width = 'list', children, actions, back }: {
   title: ReactNode;
   meta?: ReactNode;
   width?: 'list' | 'order';
   actions?: ReactNode;
+  /** A link back to the list this page was opened from, shown above the title. */
+  back?: ReactNode;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -14,6 +16,7 @@ export function Page({ title, meta, width = 'list', children, actions }: {
   }, [title]);
   return (
     <div className={s.page} data-width={width}>
+      {back && <div className={s.back}>{back}</div>}
       <header className={s.head}>
         <div>
           <h1 className={s.title}>{title}</h1>

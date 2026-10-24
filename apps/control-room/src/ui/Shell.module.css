@@ -28,20 +28,8 @@
   padding: 0 var(--gutter);
   display: flex;
   align-items: center;
-  gap: var(--s5);
+  justify-content: center;
   min-height: 56px;
-  flex-wrap: wrap;
-}
-
-.brand {
-  font-weight: var(--weight-bold);
-  white-space: nowrap;
-}
-
-.brandSub {
-  font-weight: var(--weight-regular);
-  color: var(--text-meta);
-  margin-left: var(--s1);
 }
 
 .nav {
@@ -76,52 +64,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.status {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: var(--s3);
-}
-
-.live {
-  font-size: var(--size-meta);
-  color: var(--text-meta);
-  white-space: nowrap;
-}
-.live[data-live='offline'] {
-  color: var(--red);
-  font-weight: var(--weight-bold);
-}
-
-.clock {
-  font-size: var(--size-meta);
-  color: var(--text-meta);
-  white-space: nowrap;
-}
-
 .main {
   padding: var(--s6) var(--gutter) var(--s8);
 }
 
 @media (max-width: 719px) {
   .barInner {
-    gap: 0 var(--s4);
     padding-top: var(--s2);
     padding-bottom: var(--s2);
-  }
-  .brandSub {
-    display: none;
-  }
-  .nav {
-    order: 3;
-    width: calc(100% + var(--s4));
-    margin: 0 calc(-1 * var(--s2));
-    gap: 0;
-    flex-wrap: nowrap;
-    /* Five items do not fit at phone width: scroll the row, not the page. */
-    max-width: calc(100% + var(--s4));
-    overflow-x: auto;
-    scrollbar-width: none;
   }
   .link {
     padding: var(--s2);

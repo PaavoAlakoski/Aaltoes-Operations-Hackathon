@@ -31,6 +31,9 @@ export interface Triage {
   allItems: Map<string, AttentionItem[]>;
 }
 
+/** Needs you shows at most this many orders, most urgent first; the rest stay under All orders. */
+export const NEEDS_YOU_LIMIT = 9;
+
 const groupRank = (g: Group) => GROUP_ORDER.indexOf(g);
 const clockMs = (c: Clock | null) => (c ? Date.parse(c.at) : Number.POSITIVE_INFINITY);
 

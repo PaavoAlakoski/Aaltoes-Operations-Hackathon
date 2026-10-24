@@ -5,7 +5,7 @@ import { useStore } from '../data/store';
 import { GROUP_LABEL, actionLabel } from '../domain/labels';
 import { GROUP_ORDER } from '../domain/attention';
 import { carName } from '../domain/caseView';
-import { desks, matchesDesk, matchesSearch, type QueueRow } from '../domain/triage';
+import { NEEDS_YOU_LIMIT, desks, matchesDesk, matchesSearch, type QueueRow } from '../domain/triage';
 import { Page } from '../ui/Page';
 import { Dot, Ref, clockPhrase, deskName, isOverdue, riskTone } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
@@ -27,10 +27,15 @@ export function NeedsYou() {
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const visible = useMemo(() => {
+  // Without a search, only the most urgent few. A search or desk filter looks through every order
+  // that needs a person, so nothing past the limit becomes unfindable.
+  const filtering = Boolean(q || desk);
+  const matching = useMemo(() => {
     if (!triage || !world) return [];
     return triage.rows.filter((r) => matchesDesk(r, desk) && matchesSearch(r, q, world));
   }, [triage, world, desk, q]);
+  const visible = filtering ? matching : matching.slice(0, NEEDS_YOU_LIMIT);
+  const hidden = matching.length - visible.length;
 
   // j/k move between rows, Enter opens, / searches.
   useEffect(() => {
@@ -65,10 +70,9 @@ export function NeedsYou() {
 
   if (status === 'error') return <Page title="Needs you"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
 
-  const decideCount = triage?.byGroup.decide.length ?? 0;
   const incidents = ops.incidents.filter((i) => i.status !== 'resolved').length;
   const meta = triage
-    ? `${triage.rows.length} orders need a person · ${decideCount} to decide now${incidents ? ` · ${incidents} open incidents on the road` : ''}`
+    ? `${filtering ? `${visible.length} matching` : `The ${visible.length} most urgent`}${incidents ? ` · ${incidents} open incidents on the road` : ''}`
     : 'Loading the queue…';
   const now = world?.snapshotAt ?? '';
   const since = Date.now() - SHIFT_MS;
@@ -123,6 +127,12 @@ export function NeedsYou() {
               </section>
             );
           })}
+          {hidden > 0 && (
+            <p className={s.overflow}>
+              {hidden} more {hidden === 1 ? 'order needs' : 'orders need'} a person later.{' '}
+              <Link to="/orders">See them under All orders</Link>
+            </p>
+          )}
         </div>
       )}
 

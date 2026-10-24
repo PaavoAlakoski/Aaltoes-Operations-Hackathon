@@ -89,7 +89,8 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   const primaryFirst = b.items.slice().sort((x, y) => Number(x.role === 'TRADE_IN') - Number(y.role === 'TRADE_IN'));
   for (const item of primaryFirst) {
     const v = b.vehicles.find((x) => x.id === item.vehicle_id);
-    const label = item.role === 'TRADE_IN' ? 'Trade-in' : 'Car';
+    // The section is already called Car; the row says what it identifies.
+    const label = item.role === 'TRADE_IN' ? 'Trade-in' : primaryFirst.length > 1 ? 'Main car' : 'Model and ID';
     if (!v) continue;
     const ident = [v.registration, v.synthetic_vin && `VIN ${v.synthetic_vin}`].filter(Boolean).join(' · ');
     car.push({

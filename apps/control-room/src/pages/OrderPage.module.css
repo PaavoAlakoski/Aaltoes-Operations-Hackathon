@@ -25,7 +25,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  margin: calc(-1 * var(--s3)) 0 var(--s4);
   font-size: var(--size-meta);
   color: var(--text-meta);
   text-decoration: none;

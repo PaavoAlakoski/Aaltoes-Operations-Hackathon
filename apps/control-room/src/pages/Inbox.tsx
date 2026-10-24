@@ -45,7 +45,7 @@ export function Inbox() {
                   <span className={s.meta}>
                     {t.linked_order_ids.map((id) => {
                       const ref = world.bundles.get(id)?.order.reference;
-                      return <Link key={id} to={`/orders/${ref}`}><Ref>{ref}</Ref></Link>;
+                      return <Link key={id} to={`/orders/${ref}`} state={{ from: '/inbox' }}><Ref>{ref}</Ref></Link>;
                     })}
                     {t.waiting_on && ` · waiting on ${waitingOnLabel(t.waiting_on)}`}
                   </span>
@@ -114,7 +114,7 @@ function Thread({ thread: t, world, triage }: { thread: InboxThread; world: Worl
               <li key={id} className={s.candidate}>
                 <div className={s.candidateInfo}>
                   <p>
-                    <Link to={`/orders/${b.order.reference}`} className={s.candidateLink}>{carName(b)}</Link> <Ref>{b.order.reference}</Ref>
+                    <Link to={`/orders/${b.order.reference}`} state={{ from: '/inbox' }} className={s.candidateLink}>{carName(b)}</Link> <Ref>{b.order.reference}</Ref>
                   </p>
                   <p className={s.meta}>
                     {routeLine(b, world)} · {STAGE_LABEL[deriveStage(b)]}

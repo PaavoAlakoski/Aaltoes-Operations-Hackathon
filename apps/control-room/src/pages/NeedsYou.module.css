@@ -114,6 +114,11 @@
   color: var(--text-meta);
 }
 
+.overflow {
+  margin-top: var(--s4);
+  color: var(--text-meta);
+}
+
 .side {
   display: flex;
   flex-direction: column;

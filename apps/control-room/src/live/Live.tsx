@@ -1,12 +1,11 @@
 // Live operations, woven into the other screens. Needs you gets "On the road
-// now": who is on shift, the KPI strip, the map and the incident queue. Each
+// now": who is on shift, the KPI strip and the incident queue. Each
 // order page gets its car: where it is, its incidents, the agent's proposal
 // and the conversation with the driver. Staff only; drivers use the driver app.
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { delayPhrase, type Incident, type Vehicle } from '@bahn/shared';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
-import { LiveMap } from './LiveMap';
 import { ProposalCard } from './ProposalCard';
 import { opsConfigured, useOps } from './ops';
 import s from './live.module.css';
@@ -66,6 +65,8 @@ function SignIn() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Signed out, the block is one quiet line, so the queue stays at the top.
+  const [open, setOpen] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -78,12 +79,20 @@ function SignIn() {
       setBusy(false);
     }
   }
+  if (!open) {
+    return (
+      <p className={s.signInPrompt}>
+        Cars, drivers and incidents on the road, for staff.{' '}
+        <button type="button" className={s.textButton} onClick={() => setOpen(true)}>Sign in</button>
+      </p>
+    );
+  }
   return (
     <form className={s.signIn} onSubmit={submit}>
       <div className={s.signInFields}>
         <label className={s.field}>
           <span>Email</span>
-          <input className={s.input} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input className={s.input} type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
         <label className={s.field}>
           <span>Password</span>
@@ -105,19 +114,11 @@ function Room() {
 
   const open = incidents.filter((i) => i.status !== 'resolved');
   const shown = showResolved ? incidents : open;
-  const flagged = useMemo(() => new Set(open.map((i) => i.vehicle_id)), [open]);
   const pendingByIncident = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of proposals) m.set(p.incidentId, (m.get(p.incidentId) ?? 0) + p.moves.filter((x) => x.status === 'pending').length);
     return m;
   }, [proposals]);
-
-  function selectVehicle(vehicleId: string) {
-    const v = vehicles.get(vehicleId);
-    const latest = open.find((i) => i.vehicle_id === vehicleId);
-    const to = orderPath(v, latest?.id);
-    if (to) navigate(to);
-  }
 
   async function simulate() {
     setSimErr(null);
@@ -133,7 +134,6 @@ function Room() {
   return (
     <>
       <div className={s.grid}>
-        <LiveMap corridors={ops.corridors} vehicles={[...vehicles.values()]} flagged={flagged} selectedVehicle={null} onSelect={selectVehicle} />
         <section className={s.queue} aria-label="Incidents">
           <div className={s.queueHead}>
             <h3 className={s.h2}>Incidents</h3>

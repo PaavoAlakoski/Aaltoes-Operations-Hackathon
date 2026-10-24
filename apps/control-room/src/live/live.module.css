@@ -66,6 +66,7 @@ textarea.input { width: 100%; resize: vertical; }
 
 /* Sign-in */
 .signIn { display: grid; gap: var(--s2); }
+.signInPrompt { font-size: var(--size-meta); color: var(--text-meta); }
 .signInFields { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
 .signInFields .field { flex: 1 1 200px; }
 .field { display: grid; gap: var(--s1); font-size: var(--size-meta); color: var(--text-meta); }
@@ -81,9 +82,7 @@ textarea.input { width: 100%; resize: vertical; }
 
 /* Map and queue */
 .grid { display: grid; gap: var(--s4); grid-template-columns: 1fr; margin-bottom: var(--s5); }
-@media (min-width: 960px) {
-  .grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
-}
+/* Needs you no longer shows the map; the incident queue takes the full width. */
 .map { height: 420px; border-radius: var(--radius); border: 1px solid var(--line); z-index: 0; }
 .queue { min-width: 0; display: flex; flex-direction: column; max-height: 420px; }
 .queueHead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); margin-bottom: var(--s2); }

@@ -1,7 +1,7 @@
 // One order, one decision: what happened, what the agent found or proposes,
 // the evidence, and what happens if you approve, change or reject it.
 import { useEffect, useMemo, useState, useId } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { useStore } from '../data/store';
 import { attachmentUrl } from '../data/api';
 import { caseView, WHO_LABEL, type TimelineEntry } from '../domain/caseView';
@@ -20,8 +20,20 @@ import { Icon } from '../ui/Icon';
 import { OrderLive } from '../live/Live';
 import s from './OrderPage.module.css';
 
+// The lists that link here say so in the link's state, so "back" returns to
+// the list the person came from. A direct visit goes back to Needs you.
+const BACK: Record<string, string> = { '/orders': 'All orders', '/inbox': 'Inbox' };
+
+function useBack() {
+  const state: unknown = useLocation().state;
+  const from = typeof state === 'object' && state !== null && 'from' in state ? String(state.from) : '';
+  const to = from in BACK ? from : '/';
+  return <Link to={to} className={s.back}><Icon name="back" /> {BACK[to] ?? 'Needs you'}</Link>;
+}
+
 export function OrderPage() {
   const { ref = '' } = useParams();
+  const back = useBack();
   const { status, error, retry, world, triage, decisions } = useStore();
 
   const bundle = world?.byReference.get(ref.toUpperCase());
@@ -68,6 +80,7 @@ export function OrderPage() {
   return (
     <Page
       width="order"
+      back={back}
       title={h.car}
       meta={
         <span className={s.headMeta}>
@@ -84,7 +97,6 @@ export function OrderPage() {
         </span>
       ) : undefined}
     >
-      <Link to="/" className={s.back}><Icon name="back" /> Needs you</Link>
       <p className={s.headline}>{view.headline}</p>
       <OrderLive reference={h.reference} />
 
