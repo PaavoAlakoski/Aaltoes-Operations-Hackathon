@@ -2,6 +2,7 @@
 // 1000-row limit; writes go through the three RPCs and nothing else.
 import { createClient } from '@supabase/supabase-js';
 import type { ActionKind, Decision, OutcomeStep, RecordRow } from '../domain/types';
+import type { Change } from './live';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -75,4 +76,30 @@ export async function setAutonomy(kind: string, level: AutonomyRow['level']): Pr
 /** Public URL of a packet attachment in the storage bucket. */
 export function attachmentUrl(fileName: string): string {
   return `${url}/storage/v1/object/public/packet/${fileName}`;
+}
+
+export type LiveStatus = 'connecting' | 'live' | 'offline';
+
+/**
+ * Streams changes to decisions, autonomy and records. Realtime applies the same
+ * row-level security as reads, so the browser only sees rows it could select.
+ */
+export function subscribe(handlers: {
+  decision: (c: Change<Decision>) => void;
+  autonomy: (c: Change<AutonomyRow>) => void;
+  record: (c: Change<RecordRow>) => void;
+  status: (s: LiveStatus) => void;
+}): () => void {
+  const toChange = <T>(p: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: unknown; old: unknown }): Change<T> => ({
+    type: p.eventType, next: (p.new ?? {}) as Partial<T>, prev: (p.old ?? {}) as Partial<T>,
+  });
+  const channel = client()
+    .channel(`control-room-${crypto.randomUUID()}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'decisions' }, (p) => handlers.decision(toChange<Decision>(p)))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'autonomy' }, (p) => handlers.autonomy(toChange<AutonomyRow>(p)))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, (p) => handlers.record(toChange<RecordRow>(p)))
+    .subscribe((s) => handlers.status(s === 'SUBSCRIBED' ? 'live' : s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'offline' : 'connecting'));
+  return () => {
+    void client().removeChannel(channel);
+  };
 }

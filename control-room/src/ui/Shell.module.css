@@ -76,8 +76,24 @@
   font-variant-numeric: tabular-nums;
 }
 
-.clock {
+.status {
   margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
+.live {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+  white-space: nowrap;
+}
+.live[data-live='offline'] {
+  color: var(--red);
+  font-weight: var(--weight-bold);
+}
+
+.clock {
   font-size: var(--size-meta);
   color: var(--text-meta);
   white-space: nowrap;

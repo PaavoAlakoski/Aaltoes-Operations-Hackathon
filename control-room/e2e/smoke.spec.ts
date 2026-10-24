@@ -80,3 +80,27 @@ test('the queue works from the keyboard', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/orders\/CD-420322$/);
 });
+
+test('a decision made elsewhere appears without a reload, and so does its undo', async ({ page, request }) => {
+  const target = 'work-x2174da059fcd89e8'; // CD-420516 key holder check
+  const leftovers = await request.get(`${api}/rest/v1/decisions?target_id=eq.${target}&undone_at=is.null&select=id`, { headers });
+  for (const d of (await leftovers.json()) as { id: string }[]) {
+    await request.post(`${api}/rest/v1/rpc/undo_decision`, { headers, data: { p_id: d.id } });
+  }
+
+  await page.goto('/');
+  await expect(page.getByText('Live', { exact: true })).toBeVisible({ timeout: 15000 });
+  const shift = page.getByRole('region', { name: /Decided this shift/ });
+  await expect(shift).not.toContainText('CD-420516');
+
+  // Someone else, in another browser, takes the item.
+  const made = await request.post(`${api}/rest/v1/rpc/decide`, {
+    headers, data: { p_order_id: 'ord-00516', p_target_id: target, p_action: 'take' },
+  });
+  expect(made.ok()).toBe(true);
+  await expect(shift).toContainText('CD-420516');
+
+  // And undoes it.
+  await request.post(`${api}/rest/v1/rpc/undo_decision`, { headers, data: { p_id: ((await made.json()) as { id: string }).id } });
+  await expect(shift).not.toContainText('CD-420516');
+});

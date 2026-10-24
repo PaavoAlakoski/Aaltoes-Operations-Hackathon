@@ -62,7 +62,7 @@ You need Node 20 or newer and a Supabase project (the free tier is fine).
 | --- | --- |
 | `npm test` | Domain logic (Vitest): triage groups and ordering, the evidence rules, the customer rule, next-step sourcing. Reads the packet from disk, no network. |
 | `npm run check:db` | The write rules against your project, with the browser's key: the anonymous key can read but not write, `decide()` needs a note where required and refuses a second decision, the customer rule cannot be unlocked, undo works. |
-| `npm run test:e2e` | Playwright smoke test: open the queue, open CD-420593, approve, see the numbered outcome, find it under *Decided this shift*, see a second decision refused (409), undo. Plus the keyboard. Starts the dev server if it is not running. Uses installed Google Chrome; without it run `npx playwright install chromium` and set `PW_CHANNEL=chromium`. |
+| `npm run test:e2e` | Playwright smoke test: open the queue, open CD-420593, approve, see the numbered outcome, find it under *Decided this shift*, see a second decision refused (409), undo. Plus the keyboard, and a decision made outside the page appearing (and undone) without a reload. Starts the dev server if it is not running. Uses installed Google Chrome; without it run `npx playwright install chromium` and set `PW_CHANNEL=chromium`. |
 | `npm run screens -- <folder>` | With the dev server running, screenshots every screen and the brief's named orders at 1440 px and 390 px, and fails on horizontal overflow. |
 | `npm run typecheck` | Strict TypeScript. |
 
@@ -71,6 +71,11 @@ You need Node 20 or newer and a Supabase project (the free tier is fine).
 - **The snapshot is read-only.** `records(collection, id, order_id, data)` holds every packet row
   as it was. The app loads it once (paginated past the 1000-row limit) and builds an in-memory
   index by order (`src/domain/world.ts`).
+- **It stays live.** After the first load, changes to `decisions`, `autonomy` and `records`
+  stream in through Supabase Realtime (`src/data/live.ts`). A decision someone else makes, or
+  a proposal an agent writes, shows without a reload. A burst of record changes (a re-seed) is
+  folded into one rebuild. After a dropped connection the app re-reads decisions and autonomy.
+  The header says *Live*, *Connecting…* or *Not live*.
 - **The clock is frozen.** Every "in 2 h" and "3 h ago" is measured from `manifest.snapshot_at`,
   never the real clock (`src/domain/clock.ts`).
 - **All derivation lives in `src/domain/`**, as pure functions with tests. Components only display:

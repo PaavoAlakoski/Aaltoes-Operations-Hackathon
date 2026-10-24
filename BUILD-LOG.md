@@ -180,3 +180,25 @@ horizontal overflow. Looking at the pictures found:
 - **One leftover from testing.** The migration applied to the hosted project
   that moved conflicts to HTTP 409 also marked one leftover test decision
   undone. The migration file in the repo does not include that cleanup.
+
+### Making it live
+- **Asked:** does the app update when the database changes? It didn't. It
+  loaded once, and other people's decisions only showed after a reload.
+- **Built:**
+  - `decisions`, `autonomy` and `records` are now in Supabase's realtime
+    publication.
+  - The store applies each change through small pure functions in
+    `src/data/live.ts`, which have tests.
+  - Our own save now arrives twice, from the call's reply and from the
+    stream, and the merge makes sure it shows once.
+  - The header says *Live*, *Connecting…* or *Not live*. After a drop, the
+    app re-reads decisions and autonomy to catch what it missed.
+- **Checked:**
+  - A Playwright test makes and undoes a decision through the API while the
+    page is open, and sees both without a reload.
+  - A throwaway listener counted 4,425 record changes during a full re-seed.
+    All arrived and the connection held. The app waits for a pause in a
+    burst before rebuilding.
+- **Caught before it shipped:** the new live indicator first had
+  `role="status"`, the same marker the screenshot script uses to detect a
+  loading skeleton. Every screenshot would have waited 20 seconds for it.

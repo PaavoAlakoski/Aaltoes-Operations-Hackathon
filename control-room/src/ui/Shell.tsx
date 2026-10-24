@@ -11,8 +11,15 @@ const NAV = [
   { to: '/agents', label: 'Agents', end: false },
 ];
 
+const LIVE_WORD = { live: 'Live', connecting: 'Connecting…', offline: 'Not live' } as const;
+const LIVE_HELP = {
+  live: 'Decisions and changes from others appear as they happen.',
+  connecting: 'Connecting to live updates.',
+  offline: 'Live updates are down. Changes by others show after a reload; it reconnects on its own.',
+} as const;
+
 export function Shell() {
-  const { world, triage } = useStore();
+  const { world, triage, live } = useStore();
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -37,8 +44,11 @@ export function Shell() {
             ))}
           </nav>
           {world && (
-            <span className={s.clock} title="The data is a frozen snapshot. Every relative time is measured from it.">
-              Snapshot {formatTime(world.snapshotAt)}
+            <span className={s.status}>
+              <span className={s.live} data-live={live} aria-live="polite" title={LIVE_HELP[live]}>{LIVE_WORD[live]}</span>
+              <span className={s.clock} title="The data is a frozen snapshot. Every relative time is measured from it.">
+                Snapshot {formatTime(world.snapshotAt)}
+              </span>
             </span>
           )}
         </div>
