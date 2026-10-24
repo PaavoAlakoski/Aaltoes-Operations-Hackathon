@@ -444,7 +444,11 @@ function ChatView({ db, userId }: { db: OpsClient; userId: string }) {
     };
   }, [db, userId]);
 
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [chat.length, busy]);
+  // Braces, not an expression: browsers now return a Promise from
+  // scrollIntoView, and React would call it as the cleanup and crash.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [chat.length, busy]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
