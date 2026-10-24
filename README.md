@@ -238,6 +238,45 @@ test before anything that touches the queue, the order page or `decide()`.
   at `/` and the driver app at `/driver`. Both read `VITE_SUPABASE_URL` and
   `VITE_SUPABASE_ANON_KEY` from the Vercel project's environment at build time.
 
+## Demo accounts
+
+Every account below exists on the hosted project and in `supabase/seed.sql`.
+They all share one password. The repo is public, so the hosted project's
+password is not written here: ask the team, or read `DEMO_PASSWORD` in the
+root `.env` on a machine that has it. On a local stack the password is
+`bahn-demo-local`.
+
+Staff sign in to the control room at `/live`:
+
+| Role | Name | Email |
+| --- | --- | --- |
+| Supervisor | Helena Starkwood | `helena.starkwood@demo.bahn.test` |
+| Dispatcher | Mira Kestelund | `mira.kestelund@demo.bahn.test` |
+| Dispatcher | Oskar Brennvik | `oskar.brennvik@demo.bahn.test` |
+
+Drivers sign in to the driver app at `/driver`. Each is on one car:
+
+| Driver | Email | Car | Corridor |
+| --- | --- | --- | --- |
+| Leo Quellford | `leo.quellford@demo.bahn.test` | Bentley Continental GT (`CD-420584`): **the ferry-miss scenario** | Helsinki – Travemünde ferry – Hamburg |
+| Kasper Kovelund | `kasper.kovelund@demo.bahn.test` | Bentley Continental GT (`CD-420322`), on the ferry | Helsinki – Travemünde ferry – Hamburg |
+| Jenna Erdalen | `jenna.erdalen@demo.bahn.test` | Ferrari 296 GTB (`CD-420338`) | Helsinki – Travemünde ferry – Hamburg |
+| Zoe Bergalund | `zoe.bergalund@demo.bahn.test` | Bentley Continental GT (`CD-420452`) | Helsinki – Tampere – Turku |
+| Daniel Arelmont | `daniel.arelmont@demo.bahn.test` | Ferrari 296 GTB (`CD-421013`) | Helsinki – Tampere – Turku |
+| Hanna Wenverin | `hanna.wenverin@demo.bahn.test` | Volkswagen Golf (`CD-420384`), waiting for pickup | Helsinki – Tampere – Turku |
+| Sofia Lundervik | `sofia.lundervik@demo.bahn.test` | BMW M4 (`CD-420366`) | Helsinki – Lahti – Oulu |
+| Rafael Rillavik | `rafael.rillavik@demo.bahn.test` | Ferrari 296 GTB (`CD-420806`) | Helsinki – Lahti – Oulu |
+| Kasper Carvell | `kasper.carvell@demo.bahn.test` | Porsche 911 Carrera (`CD-420145`) | Helsinki – Lahti – Oulu |
+| Rafael Venwick | `rafael.venwick@demo.bahn.test` | Mercedes-Benz S-Class (`CD-420917`) | Helsinki – Lahti – Oulu |
+| William Mervalen | `william.mervalen@demo.bahn.test` | Bentley Continental GT (`CD-420537`) | Malmö – Copenhagen – Rødby ferry – Hamburg |
+| Nadia Halverick | `nadia.halverick@demo.bahn.test` | Mercedes-Benz EQE (`CD-420324`) | Malmö – Copenhagen – Rødby ferry – Hamburg |
+| Cole Mervalen | `cole.mervalen@demo.bahn.test` | Porsche Taycan (`CD-420735`) | Hamburg – Frankfurt – Munich |
+| Selma Talverick | `selma.talverick@demo.bahn.test` | Audi Q8 e-tron (`CD-420071`) | Hamburg – Frankfurt – Munich |
+| Elias Halverick | `elias.halverick@demo.bahn.test` | Porsche Macan (`CD-421024`), waiting for pickup | Hamburg – Frankfurt – Munich |
+
+The simulator signs in as all fifteen drivers, so a driver you are using by
+hand will also be moved by it while it runs.
+
 ## A 3-minute demo
 
 Two windows side by side: the control room at `/live` signed in as a
