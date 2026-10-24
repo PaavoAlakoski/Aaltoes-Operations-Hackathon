@@ -11,7 +11,7 @@ import { Ref, clockPhrase } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import s from './AllOrders.module.css';
 
-type SortKey = 'reference' | 'car' | 'customer' | 'stage' | 'open' | 'clock';
+type SortKey = 'priority' | 'reference' | 'car' | 'customer' | 'stage' | 'open' | 'clock';
 const STAGES = Object.keys(STAGE_LABEL) as Stage[];
 const COLS: [SortKey, string][] = [
   ['reference', 'Order'], ['car', 'Car'], ['customer', 'Customer'], ['stage', 'Stage'], ['open', 'Open'], ['clock', 'Next deadline'],
@@ -20,7 +20,7 @@ const COLS: [SortKey, string][] = [
 export function AllOrders() {
   const { status, error, retry, world, triage } = useStore();
   const [params, setParams] = useSearchParams();
-  const sort = (params.get('sort') as SortKey | null) ?? 'reference';
+  const sort = (params.get('sort') as SortKey | null) ?? 'priority';
   const desc = params.get('dir') === 'desc';
   const stage = params.get('stage') as Stage | null;
 
@@ -39,6 +39,8 @@ export function AllOrders() {
   const filtered = rows.filter((r) => !stage || r.h.stage === stage);
   const key = (r: (typeof rows)[number]): string | number => {
     switch (sort) {
+      // Most open issues first, then by stage, delivered and cancelled last.
+      case 'priority': return -r.open * 100 + STAGES.indexOf(r.h.stage);
       case 'reference': return r.h.reference;
       case 'car': return r.car;
       case 'customer': return r.h.customer;

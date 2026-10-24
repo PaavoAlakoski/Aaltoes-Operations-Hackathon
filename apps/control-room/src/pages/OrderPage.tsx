@@ -97,12 +97,12 @@ export function OrderPage() {
         </span>
       ) : undefined}
     >
-      <p className={s.headline}>{view.headline}</p>
+      {view.headline && <p className={s.headline}>{view.headline}</p>}
       <OrderLive reference={h.reference} />
 
       <div className={s.grid}>
         <div className={s.left}>
-          {lead ? <Lead key={lead.id} item={lead} world={world} /> : <QuietNote />}
+          {lead && <Lead key={lead.id} item={lead} world={world} />}
 
           {others.length > 0 && (
             <section className={s.section} aria-labelledby="also">
@@ -157,14 +157,6 @@ export function OrderPage() {
         </aside>
       </div>
     </Page>
-  );
-}
-
-function QuietNote() {
-  return (
-    <div className={s.quiet}>
-      <p className={s.leadTitle}>Nothing needs you on this order.</p>
-    </div>
   );
 }
 

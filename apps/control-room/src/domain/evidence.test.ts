@@ -118,7 +118,7 @@ describe('a quiet order is not a verified order', () => {
     const t = [...world.bundles.values()].find((b) => orderItems(b, world).length === 0 && deriveStage(b) === 'booked')!;
     const v = caseView(t, world, [], []);
     expect(v.quiet).toBe(true);
-    expect(v.headline).toMatch(/not the same as verified/);
+    expect(v.headline).toBe('');
   });
 });
 

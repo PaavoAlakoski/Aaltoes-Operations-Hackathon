@@ -282,11 +282,9 @@ function timeline(b: OrderBundle, world: World, decisions: Decision[]): Timeline
 // --- Headline -------------------------------------------------------------
 
 function headline(b: OrderBundle, world: World, lead: AttentionItem | null, open: AttentionItem[]): string {
-  const stage = deriveStage(b);
   if (!lead) {
-    if (stage === 'cancelled') return 'Cancelled. Nothing is open.';
-    if (stage === 'delivered') return 'Delivered. Nothing is open on this order.';
-    return `${STAGE_LABEL[stage]}. Nothing is open; that is not the same as verified.`;
+    // The stage chip already says where it stands; a quiet order needs no sentence.
+    return '';
   }
   const situation = situationItem(open) ?? lead;
   const proposal = open.find((i) => i.kind === 'proposal' && i.group === 'decide');
