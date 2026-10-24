@@ -22,7 +22,7 @@ const pages: [string, string][] = [
   ['CD-420702-promise', '/orders/CD-420702'],
   ['CD-420455-condition', '/orders/CD-420455'],
   ['CD-420384-keys', '/orders/CD-420384'],
-  ['CD-420004-quiet', '/orders/CD-420004'],
+  ['CD-420075-quiet', '/orders/CD-420075'],
   ['missing', '/orders/CD-999999'],
 ];
 

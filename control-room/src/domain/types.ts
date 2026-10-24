@@ -128,7 +128,7 @@ export interface Proposal {
 }
 
 export interface EndpointDetail {
-  id: string; order_id: string; boundary: 'PICKUP' | 'DELIVERY'; address_id: string; site_id: string | null;
+  id: string; order_id: string; boundary: 'PICKUP' | 'DELIVERY'; address_id: string; point_id?: string; site_id: string | null;
   access_instruction: string | null; access_status: 'CONFIRMED' | 'NEEDS_VERIFICATION';
   contact_name: string | null; contact_role: string | null; contact_handle: string | null; contact_status: 'CONFIRMED' | 'UNCONFIRMED';
   last_confirmed_at: Iso | null; last_confirmed_source: string | null; stated_by: string; stated_at: Iso;

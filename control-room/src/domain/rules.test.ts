@@ -97,3 +97,19 @@ describe('next-step sourcing: record, then agent, then playbook', () => {
     expect(row.next.text).toMatch(/owner's service decision/);
   });
 });
+
+describe('agent records', () => {
+  it('counts each proposal once per outcome, and waiting means waiting on a person', async () => {
+    const { agentRecords } = await import('./agents');
+    const copilot = agentRecords(world, []).find((a) => a.id === 'ops-copilot')!;
+    expect(copilot.proposed).toBe(6);
+    expect(copilot.waiting).toBe(3);
+    expect(copilot.approved + copilot.changed + copilot.rejected + copilot.waiting).toBeLessThanOrEqual(copilot.proposed);
+    const decided = agentRecords(world, [{
+      id: 'd', order_id: 'ord-00593', target_type: 'proposal', target_id: 'agent-x6ad46f8e74398f5e', action: 'approve',
+      note: null, decided_by: 'x', decided_at: '2026-10-21T09:00:00Z', effects: [], undone_at: null,
+    }]).find((a) => a.id === 'ops-copilot')!;
+    expect(decided.waiting).toBe(2);
+    expect(decided.approved).toBe(copilot.approved + 1);
+  });
+});

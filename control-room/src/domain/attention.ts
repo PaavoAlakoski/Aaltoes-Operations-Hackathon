@@ -1,7 +1,7 @@
 // What needs a person on an order. Each item says why, what the next step is
 // and where that step came from, which clock decides it, and who owns it.
 import type { ActionKind, Decision, InboxThread, Proposal } from './types';
-import type { OrderBundle, World } from './world';
+import { deliveryPromise, pickupSlot, type OrderBundle, type World } from './world';
 import { deriveStage, isAlertOpen, pickupUnverified } from './evidence';
 import {
   EXTERNAL_WAITS, categoryLabel, incidentLabel, incidentStatusLabel, partyLabel, signalLabel, waitingOnLabel, workKindLabel,
@@ -66,11 +66,10 @@ export function decidingClock(b: OrderBundle, now: string): Clock | null {
   if (stage === 'cancelled' || stage === 'delivered') return null;
   const collected = b.steps.some((s) => s.kind === 'VEHICLE_PICKUP' && s.status === 'COMPLETED') || stage === 'moving';
   if (!collected) {
-    const slot = b.windows.find((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected);
+    const slot = pickupSlot(b);
     if (slot) return { at: slot.start_at, what: isPast(slot.end_at, now) ? 'pickup slot passed' : 'pickup' };
   }
-  const promise = b.windows.find((w) => w.purpose === 'CUSTOMER_DELIVERY_PROMISE' && w.is_selected)
-    ?? b.windows.find((w) => w.purpose === 'CUSTOMER_DELIVERY_PROMISE');
+  const promise = deliveryPromise(b);
   // A booked crossing still ahead decides earlier than the promise: miss check-in and the promise goes too.
   const ferry = b.reservations.find((r) => r.kind === 'FERRY' && r.status === 'BOOKED' && !r.cancelled_at
     && r.check_in_cutoff_at && !isPast(r.check_in_cutoff_at, now) && (!promise || r.check_in_cutoff_at < promise.end_at));
@@ -246,7 +245,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
   // Derived: a booked car whose pickup contact or access nobody has checked for this order.
   if (stage === 'booked') {
     const ep = b.endpoints.find((e) => e.boundary === 'PICKUP');
-    const slot = b.windows.find((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected);
+    const slot = pickupSlot(b);
     // A check is due when the slot is near, not for every booking with a gap (dataset README).
     const dueSoon = slot && !isPast(slot.end_at, now) && minutesBetween(now, slot.start_at) <= PICKUP_CHECK_HOURS * 60;
     if (ep && slot && dueSoon && pickupUnverified(ep)) {

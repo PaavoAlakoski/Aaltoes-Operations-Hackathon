@@ -190,6 +190,7 @@ export const documentStatusLabel = (c: string) => lookup(DOC_STATUS, c).toLowerC
 
 const PROOF_KIND: Record<string, string> = {
   PICKUP_PHOTOS: 'Pickup photos', DELIVERY_PHOTOS: 'Delivery photos', TRADE_IN_PICKUP_PHOTOS: 'Trade-in pickup photos',
+  MESSAGE_PHOTO: 'Photo sent in a message', SITE_VISIT_PHOTO: 'Site visit photo',
   TRADE_IN_DELIVERY_PHOTOS: 'Trade-in delivery photos', YARD_ARRIVAL_PHOTOS: 'Yard arrival photos',
   YARD_RELEASE_PHOTOS: 'Yard release photos', KEY_PICKUP_PHOTOS: 'Key photos at pickup', KEY_DELIVERY_PHOTOS: 'Key photos at delivery',
 };
@@ -298,3 +299,10 @@ export const CERTAINTY_HELP = {
   quote: 'A price or seat seen at a time; not booked',
   missing: 'Not recorded',
 } as const;
+
+/** Attachment kinds share names with proofs and documents. */
+export function attachmentKindLabel(kind: string): string {
+  return PROOF_KIND[kind] ?? DOC_KIND[kind] ?? humanize(kind);
+}
+
+export const capitalize = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);

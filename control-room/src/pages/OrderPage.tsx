@@ -9,7 +9,7 @@ import type { AttentionItem } from '../domain/attention';
 import type { Fact } from '../domain/evidence';
 import { evidenceLine } from '../domain/evidenceRefs';
 import { payloadSteps, rechecksBeforeActing, autonomyKinds } from '../domain/proposals';
-import { AUTONOMY_KIND, AUTONOMY_LEVEL, alertStatusLabel, proposalStatusLabel, humanize } from '../domain/labels';
+import { AUTONOMY_KIND, AUTONOMY_LEVEL, alertStatusLabel, attachmentKindLabel, proposalStatusLabel, humanize } from '../domain/labels';
 import { formatShort, formatTime } from '../domain/clock';
 import type { World } from '../domain/world';
 import { Page } from '../ui/Page';
@@ -132,7 +132,7 @@ export function OrderPage() {
                   <li key={a.id}>
                     <a href={attachmentUrl(a.file_name)} target="_blank" rel="noreferrer" className={s.file}>
                       <Icon name="file" />
-                      <span>{humanize(a.kind)}</span>
+                      <span>{attachmentKindLabel(a.kind)}</span>
                     </a>
                     {a.captured_at && <span className={s.meta}> <When iso={a.captured_at} now={now} /></span>}
                   </li>
@@ -213,6 +213,8 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
         </div>
       )}
 
+      {isConditionItem(item) && <Photos orderId={item.orderId} world={world} />}
+
       {!p && (
         <div className={s.block}>
           <h3 className={s.blockTitle}>Next step</h3>
@@ -227,6 +229,37 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
         <DecisionControls key={item.id} item={item} />
       </div>
     </article>
+  );
+}
+
+/** Condition claims are decided on photos, so the lead shows them. */
+function isConditionItem(item: AttentionItem): boolean {
+  const code = `${item.kind === 'alert' ? item.title : ''} ${item.proposal?.command ?? ''} ${item.status ?? ''}`;
+  return /condition/i.test(code) || /mark after delivery|condition claim/i.test(item.title);
+}
+
+function Photos({ orderId, world }: { orderId: string; world: World }) {
+  const photos = (world.bundles.get(orderId)?.attachments ?? [])
+    .filter((a) => a.content_type.startsWith('image/'))
+    .sort((a, b) => (a.captured_at ?? '').localeCompare(b.captured_at ?? ''));
+  if (!photos.length) return null;
+  return (
+    <div className={s.block}>
+      <h3 className={s.blockTitle}>Photos on file</h3>
+      <ul className={s.photos}>
+        {photos.map((a) => (
+          <li key={a.id}>
+            <a href={attachmentUrl(a.file_name)} target="_blank" rel="noreferrer" className={s.photo}>
+              <img src={attachmentUrl(a.file_name)} alt={`${attachmentKindLabel(a.kind)}${a.captured_at ? `, ${formatTime(a.captured_at)}` : ''}`} loading="lazy" />
+            </a>
+            <p className={s.meta}>
+              {attachmentKindLabel(a.kind)}{a.captured_at && <> · <When iso={a.captured_at} now={world.snapshotAt} /></>}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className={s.meta}>A photo shows what was submitted. It does not show when or by whom a mark was made.</p>
+    </div>
   );
 }
 

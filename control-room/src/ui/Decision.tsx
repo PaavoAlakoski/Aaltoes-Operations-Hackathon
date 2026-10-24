@@ -59,7 +59,9 @@ export function DecisionControls({ item, compact = false }: { item: AttentionIte
 
   const needsNote = picked ? NEEDS_NOTE.has(picked) : false;
   const steps = picked ? outcomeSteps(item, picked, note, world) : [];
-  const primary = item.actions[0];
+  // One primary per decision. In a compact list (folded items, inbox candidates)
+  // several items sit side by side, so the choice is plain text; Save is the primary.
+  const primary = compact ? null : item.actions[0];
 
   async function save() {
     if (!picked) return;

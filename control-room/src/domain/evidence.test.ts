@@ -134,3 +134,12 @@ describe('every fact carries a certainty and, unless missing, who said it', () =
     }
   });
 });
+
+describe('a trade-in has its own slot', () => {
+  it('shows the main car’s pickup slot and labels the trade-in’s separately', () => {
+    const b = ref('CD-420455');
+    const pickup = caseView(b, world, orderItems(b, world), []).facts.find((s) => s.title === 'Pickup')!;
+    expect(pickup.facts.find((f) => f.label === 'Pickup slot')!.value).toMatch(/16 Oct/);
+    expect(pickup.facts.find((f) => f.label === 'Trade-in pickup slot')!.value).toMatch(/21 Oct/);
+  });
+});

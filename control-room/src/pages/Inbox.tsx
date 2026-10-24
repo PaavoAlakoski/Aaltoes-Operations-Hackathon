@@ -3,7 +3,7 @@
 import { Link } from 'react-router';
 import { useStore } from '../data/store';
 import type { InboxThread } from '../domain/types';
-import type { World } from '../domain/world';
+import { pickupSlot, type World } from '../domain/world';
 import type { Triage } from '../domain/triage';
 import { carName, routeLine } from '../domain/caseView';
 import { STAGE_LABEL, categoryLabel, channelLabel, partyLabel, waitingOnLabel } from '../domain/labels';
@@ -108,7 +108,7 @@ function Thread({ thread: t, world, triage }: { thread: InboxThread; world: Worl
             const b = world.bundles.get(id);
             const item = triage.allItems.get(id)?.find((i) => i.id === `${t.id}#${id}`);
             if (!b) return null;
-            const slot = b.windows.find((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected);
+            const slot = pickupSlot(b);
             const driver = b.assignments.find((a) => a.status === 'ASSIGNED' || a.status === 'IN_PROGRESS');
             const ruledOut = linkDecision && item?.decision?.id === linkDecision.id && linkDecision.target_id !== item.id;
             return (

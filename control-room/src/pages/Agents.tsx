@@ -16,7 +16,7 @@ const COLUMNS = [
   ['changed', 'Changed'],
   ['rejected', 'Rejected'],
   ['failed', 'Failed'],
-  ['waiting', 'Waiting'],
+  ['waiting', 'Needs a yes'],
 ] as const;
 
 const LEVELS = Object.keys(AUTONOMY_LEVEL) as AutonomyRow['level'][];

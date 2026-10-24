@@ -26,8 +26,8 @@ export function agentRecords(world: World, decisions: Decision[]): AgentRecord[]
       else if (p.review?.decision === 'EDITED' || d?.action === 'change') r.changed++;
       else if (p.review?.decision === 'REJECTED' || d?.action === 'reject') r.rejected++;
       if (p.execution?.status === 'FAILED') r.failed++;
-      const open = p.status === 'PENDING_REVIEW' || p.status === 'APPROVED_AWAITING_EXECUTION';
-      if (open && !d) r.waiting++;
+      // Waiting means waiting on a person's yes. Approved-but-not-done is counted as approved.
+      if (p.status === 'PENDING_REVIEW' && !d) r.waiting++;
     }
     return r;
   });

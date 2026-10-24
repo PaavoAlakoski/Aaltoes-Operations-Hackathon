@@ -1,7 +1,7 @@
 // Everything the order page shows, derived in one place: header, headline,
 // the lead decision, the other open items, the facts and the timeline.
 import type { Decision } from './types';
-import type { OrderBundle, World } from './world';
+import { deliveryPromise, otherPickupSlots, pickupSlot, type OrderBundle, type World } from './world';
 import {
   accessFact, bookingFact, boardingFact, cmrFact, contactFact, deriveStage, positionFact, quoteFact, type Fact, type Stage,
 } from './evidence';
@@ -9,9 +9,9 @@ import { decidingClock, isOpen, type AttentionItem, type Clock } from './attenti
 import { leadItem, compareItems, situationItem } from './triage';
 import {
   STAGE_LABEL, actorLabel, documentKindLabel, documentStatusLabel, eventLabel, proofKindLabel, proofStatusLabel, sourceLabel,
-  ACTION_LABEL, signalLabel,
+  ACTION_LABEL, signalLabel, capitalize,
 } from './labels';
-import { formatTime } from './clock';
+import { formatTime, relative } from './clock';
 
 export interface CaseHeader {
   reference: string;
@@ -86,7 +86,8 @@ function facts(b: OrderBundle, world: World): FactSection[] {
 
   // Car
   const car: Fact[] = [];
-  for (const item of b.items) {
+  const primaryFirst = b.items.slice().sort((x, y) => Number(x.role === 'TRADE_IN') - Number(y.role === 'TRADE_IN'));
+  for (const item of primaryFirst) {
     const v = b.vehicles.find((x) => x.id === item.vehicle_id);
     const label = item.role === 'TRADE_IN' ? 'Trade-in' : 'Car';
     if (!v) continue;
@@ -105,7 +106,13 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   pickup.push(addressFact('Pickup at', pAddr, b));
   const pEp = b.endpoints.find((e) => e.boundary === 'PICKUP');
   if (pEp) pickup.push(accessFact(pEp), contactFact(pEp));
-  const slot = b.windows.find((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected);
+  const slot = pickupSlot(b);
+  for (const other of otherPickupSlots(b)) {
+    pickup.push({
+      label: 'Trade-in pickup slot', value: `${formatTime(other.start_at, other.timezone)}–${formatTime(other.end_at, other.timezone).split(', ')[1]}`,
+      certainty: 'planned', by: `selected by ${sourceLabel(other.source)}`, at: null,
+    });
+  }
   if (slot) {
     pickup.push({
       label: 'Pickup slot', value: `${formatTime(slot.start_at, slot.timezone)}–${formatTime(slot.end_at, slot.timezone).split(', ')[1]}`,
@@ -116,7 +123,13 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   const notFound = b.events.find((e) => e.command === 'pickup.attempted' && e.to_state === 'VEHICLE_NOT_FOUND');
   if (pickedUp) pickup.push({ label: 'Collected', value: 'Car collected', certainty: 'confirmed', by: 'driver app', at: pickedUp.completed_at });
   else if (notFound) pickup.push({ label: 'Collected', value: 'Driver went, car not found', certainty: 'stated', by: 'driver', at: notFound.recorded_at });
-  else if (stage !== 'cancelled') pickup.push({ label: 'Collected', value: 'Not yet', certainty: 'missing', by: null, at: null });
+  else if (stage !== 'cancelled') {
+    // Before the slot, an uncollected car is the plan, not a gap.
+    const due = slot && Date.parse(slot.end_at) < Date.parse(now);
+    pickup.push(due || !slot
+      ? { label: 'Collected', value: 'No collection recorded', certainty: 'missing', by: null, at: null, note: slot ? 'The slot has passed' : undefined }
+      : { label: 'Collected', value: 'Not yet, pickup is planned', certainty: 'planned', by: 'pickup slot', at: null });
+  }
   sections.push({ title: 'Pickup', facts: pickup });
 
   // Driver and travel
@@ -152,7 +165,7 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   delivery.push(addressFact('Deliver to', world.addresses.get(b.order.delivery_address_id), b));
   const dEp = b.endpoints.find((e) => e.boundary === 'DELIVERY');
   if (dEp && stage !== 'delivered') delivery.push(accessFact(dEp), contactFact(dEp));
-  const promise = b.windows.find((w) => w.purpose === 'CUSTOMER_DELIVERY_PROMISE' && w.is_selected) ?? b.windows.find((w) => w.purpose === 'CUSTOMER_DELIVERY_PROMISE');
+  const promise = deliveryPromise(b);
   if (promise) {
     delivery.push({
       label: 'Delivery promise', value: `${formatTime(promise.start_at, promise.timezone)}–${formatTime(promise.end_at, promise.timezone).split(', ')[1]}`,
@@ -167,14 +180,14 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   for (const d of b.documents) {
     if (d.kind === 'CMR') delivery.push(cmrFact(d));
     else delivery.push({
-      label: documentKindLabel(d.kind), value: documentStatusLabel(d.status),
+      label: documentKindLabel(d.kind), value: capitalize(documentStatusLabel(d.status)),
       certainty: d.status === 'VERIFIED' || d.status === 'SIGNED' ? 'confirmed' : d.status === 'MISSING' ? 'missing' : 'planned',
       by: 'document record', at: d.updated_at,
     });
   }
   for (const p of b.proofs.filter((x) => x.status === 'REJECTED' || x.status === 'REQUIRED' || x.status === 'SUBMITTED')) {
     delivery.push({
-      label: proofKindLabel(p.kind), value: proofStatusLabel(p.status) + (p.review_note ? `: ${p.review_note}` : ''),
+      label: proofKindLabel(p.kind), value: capitalize(proofStatusLabel(p.status)) + (p.review_note ? `: ${p.review_note}` : ''),
       certainty: p.status === 'REQUIRED' ? 'missing' : 'stated', by: p.status === 'REJECTED' ? 'reviewer' : 'driver', at: p.reviewed_at ?? p.submitted_at ?? null,
     });
   }
@@ -267,11 +280,33 @@ function headline(b: OrderBundle, world: World, lead: AttentionItem | null, open
   const situation = situationItem(open) ?? lead;
   const proposal = open.find((i) => i.kind === 'proposal' && i.group === 'decide');
   const first = `${situation.title.replace(/\.$/, '')}.`;
+  const context = stageContext(b, world);
   if (proposal && proposal !== situation) {
     const agent = world.agents.get(proposal.proposal!.proposed_by_agent_id)?.title ?? 'An agent';
     return proposal.status === 'FAILED' ? `${first} The ${agent.toLowerCase()}’s attempt failed.` : `${first} The ${agent.toLowerCase()} has a proposal for you.`;
   }
-  return first;
+  return context ? `${first} ${context}` : first;
+}
+
+/** One clause of where the order stands, so the headline says more than the lead's title. */
+function stageContext(b: OrderBundle, world: World): string | null {
+  const now = world.snapshotAt;
+  const stage = deriveStage(b);
+  if (stage === 'delivered') {
+    const d = b.events.filter((e) => e.command === 'vehicle.delivered').at(-1);
+    return d ? `Delivered ${relative(d.recorded_at, now)}.` : 'Delivered.';
+  }
+  const clock = decidingClock(b, now);
+  if (!clock) return null;
+  const when = relative(clock.at, now);
+  const past = Date.parse(clock.at) < Date.parse(now);
+  switch (clock.what) {
+    case 'pickup': return past ? `Pickup was due ${when}.` : `Pickup ${when}.`;
+    case 'pickup slot passed': return `The pickup slot started ${when}.`;
+    case 'promise ends': return past ? `The delivery promise ended ${when}.` : `The delivery promise ends ${when}.`;
+    case 'ferry check-in closes': return `Ferry check-in closes ${when}.`;
+    default: return null;
+  }
 }
 
 export function caseView(b: OrderBundle, world: World, items: AttentionItem[], decisions: Decision[]): CaseView {

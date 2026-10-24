@@ -204,3 +204,26 @@ export function buildWorld(rows: RecordRow[]): World {
     proposals: all<Proposal>('agent_proposals'),
   };
 }
+
+/**
+ * The main car's selected pickup slot and delivery promise. A trade-in has its
+ * own route points and windows, so windows are matched to the order's endpoints.
+ */
+export function pickupSlot(b: OrderBundle): TimeWindow | undefined {
+  const point = b.endpoints.find((e) => e.boundary === 'PICKUP');
+  const slots = b.windows.filter((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected);
+  return slots.find((w) => w.point_id === point?.point_id) ?? slots[0];
+}
+
+export function deliveryPromise(b: OrderBundle): TimeWindow | undefined {
+  const point = b.endpoints.find((e) => e.boundary === 'DELIVERY');
+  const promises = b.windows.filter((w) => w.purpose === 'CUSTOMER_DELIVERY_PROMISE');
+  return promises.find((w) => w.point_id === point?.point_id && w.is_selected)
+    ?? promises.find((w) => w.is_selected) ?? promises[0];
+}
+
+/** Selected pickup slots for other items on the order, such as a trade-in. */
+export function otherPickupSlots(b: OrderBundle): TimeWindow[] {
+  const main = pickupSlot(b);
+  return b.windows.filter((w) => w.purpose === 'SELECTED_PICKUP_SLOT' && w.is_selected && w !== main);
+}
