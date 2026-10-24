@@ -3,7 +3,8 @@
 // secret. Without it, or when Google refuses a call, drive times fall back to
 // the same estimate the SQL side uses (straight line x 1.25 at 75 km/h) and
 // hotels come back empty. Every result says which source it came from, so
-// the agent can say so.
+// the agent can say so. Google is paid per request, so only the demo car
+// (the train-delay scenario) uses it; every other car gets the estimate.
 
 export type LatLng = { lat: number; lng: number };
 export type Drive = { minutes: number; km: number; source: "google" | "estimate"; note?: string };
@@ -20,6 +21,10 @@ export type Hotel = {
 
 const key = () => Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 
+/** The one car that asks Google: Elias Halverick's, in simulate_train_delay(). */
+export const GOOGLE_VEHICLE_ID = "veh-01024";
+const NOT_DEMO = "Google is only used for the demo car";
+
 export function kmBetween(a: LatLng, b: LatLng): number {
   const r = (d: number) => (d * Math.PI) / 180;
   const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
@@ -35,7 +40,8 @@ const waypoint = (p: LatLng) => ({ waypoint: { location: { latLng: { latitude: p
 const seconds = (d: string | undefined) => Number(String(d ?? "0s").replace("s", ""));
 
 /** Drive time from a to b, leaving at departAt (now if missing or past). */
-export async function driveTime(a: LatLng, b: LatLng, departAt?: Date): Promise<Drive> {
+export async function driveTime(vehicleId: string, a: LatLng, b: LatLng, departAt?: Date): Promise<Drive> {
+  if (vehicleId !== GOOGLE_VEHICLE_ID) return estimate(a, b, NOT_DEMO);
   if (!key()) return estimate(a, b, "GOOGLE_MAPS_API_KEY is not set");
   const body: Record<string, unknown> = {
     origin: { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
@@ -61,9 +67,10 @@ export async function driveTime(a: LatLng, b: LatLng, departAt?: Date): Promise<
 }
 
 /** Drive times from each origin to one destination, in the origins' order. */
-export async function driveTimes(origins: LatLng[], b: LatLng): Promise<Drive[]> {
+export async function driveTimes(vehicleId: string, origins: LatLng[], b: LatLng): Promise<Drive[]> {
   if (origins.length === 0) return [];
   const fallback = (note: string) => origins.map((a) => estimate(a, b, note));
+  if (vehicleId !== GOOGLE_VEHICLE_ID) return fallback(NOT_DEMO);
   if (!key()) return fallback("GOOGLE_MAPS_API_KEY is not set");
   try {
     const res = await fetch("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
@@ -88,7 +95,8 @@ export async function driveTimes(origins: LatLng[], b: LatLng): Promise<Drive[]>
 }
 
 /** Hotels within radius metres of a point, nearest first. */
-export async function hotelsNear(p: LatLng, radius = 3000): Promise<{ hotels: Hotel[]; source: "google" | "none"; note?: string }> {
+export async function hotelsNear(vehicleId: string, p: LatLng, radius = 3000): Promise<{ hotels: Hotel[]; source: "google" | "none"; note?: string }> {
+  if (vehicleId !== GOOGLE_VEHICLE_ID) return { hotels: [], source: "none", note: `${NOT_DEMO}, so no hotels could be looked up` };
   if (!key()) return { hotels: [], source: "none", note: "GOOGLE_MAPS_API_KEY is not set, so no hotels could be looked up" };
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {

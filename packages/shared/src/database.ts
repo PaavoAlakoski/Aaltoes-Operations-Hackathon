@@ -1141,6 +1141,7 @@ export type Database = {
         Returns: Database["public"]["Tables"]["incidents"]["Row"]
       }
       simulate_train_delay: { Args: never; Returns: Json }
+      touch_presence: { Args: never; Returns: undefined }
       undo_decision: {
         Args: { p_id: string }
         Returns: Database["public"]["Tables"]["decisions"]["Row"]

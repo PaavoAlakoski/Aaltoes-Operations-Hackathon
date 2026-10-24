@@ -21,6 +21,24 @@ export type MarketJob = Tables<'market_jobs'>;
 export type DriverStay = Tables<'driver_stays'>;
 export type ChatMessage = Tables<'driver_chat_messages'>;
 
+/**
+ * Tells the backend someone has this app open: once a minute while the tab is
+ * visible. Google and the agent only run while someone does. Returns a stop.
+ */
+export function keepPresence(db: OpsClient): () => void {
+  const touch = () => {
+    // A query only runs once something calls then().
+    if (document.visibilityState === 'visible') db.rpc('touch_presence').then(() => {});
+  };
+  touch();
+  const id = setInterval(touch, 60_000);
+  document.addEventListener('visibilitychange', touch);
+  return () => {
+    clearInterval(id);
+    document.removeEventListener('visibilitychange', touch);
+  };
+}
+
 /** "17:40" in the clock of the place a time refers to. */
 export function localTime(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(iso));

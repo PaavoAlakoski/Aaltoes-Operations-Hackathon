@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  CONTROL_ROOM_TOPIC, POSITION_EVENT, corridorTopic, createOpsClient, groupProposals,
+  CONTROL_ROOM_TOPIC, POSITION_EVENT, corridorTopic, createOpsClient, groupProposals, keepPresence,
   type ControlRoomPresence, type Corridor, type DriverStay, type DriverTrip, type Incident, type Kpis, type MarketJob,
   type Message, type OpsClient, type PickupSite, type PositionPayload, type Profile, type Proposal, type Suggestion,
   type Vehicle,
@@ -131,6 +131,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
 
   // Load everything once per sign-in, then subscribe.
   const userId = session?.user.id ?? null;
+  useEffect(() => (userId ? keepPresence(client()) : undefined), [userId]);
   useEffect(() => {
     if (!authReady) return;
     if (!userId) {

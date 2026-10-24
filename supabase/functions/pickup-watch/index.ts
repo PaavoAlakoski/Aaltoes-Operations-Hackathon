@@ -1,5 +1,6 @@
 // pickup-watch: is each driver on their way to a pickup still in time?
-// Called by pg_cron every five minutes, and with one vehicle_id by the
+// Called by pg_cron every 20 minutes while someone has an app open (see
+// app.someone_active), and with one vehicle_id by the
 // train-delay scenario and after a driver is reassigned. For every car
 // waiting for pickup it works out the driver's ETA at the dealer (their trip,
 // then Google drive time) against the key handover, stores it on the car for

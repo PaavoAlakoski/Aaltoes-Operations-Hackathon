@@ -306,7 +306,7 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
         lat: number;
         lng: number;
       }>;
-      const drives = await driveTimes(candidates.map((c) => ({ lat: c.lat, lng: c.lng })), site);
+      const drives = await driveTimes(input.vehicle_id, candidates.map((c) => ({ lat: c.lat, lng: c.lng })), site);
       const closes = site.closes_at ? new Date(site.closes_at) : null;
       const rows = candidates.map((c, i) => {
         const d = drives[i];
@@ -329,7 +329,7 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
       return { site: site.name, closes_local: site.closes_at ? hhmm(site.closes_at, site.timezone) : null, candidates: rows };
     }
     case "find_stay_near": {
-      const found = await hotelsNear({ lat: Number(input.lat), lng: Number(input.lng) });
+      const found = await hotelsNear(run.vehicleId, { lat: Number(input.lat), lng: Number(input.lng) });
       for (const h of found.hotels) seen.stays.set(h.place_id, { name: h.name, address: h.address, lat: h.lat, lng: h.lng });
       return found;
     }

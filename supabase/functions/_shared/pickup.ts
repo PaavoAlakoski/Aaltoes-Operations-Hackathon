@@ -52,13 +52,13 @@ export async function computeEta(ctx: PickupContext): Promise<Eta> {
   if (ctx.trip) {
     const t = ctx.trip;
     const arrive = new Date(t.expected_arrival);
-    drive = await driveTime({ lat: t.to_lat, lng: t.to_lng }, site, arrive);
+    drive = await driveTime(ctx.vehicle.id, { lat: t.to_lat, lng: t.to_lng }, site, arrive);
     eta = new Date(arrive.getTime() + drive.minutes * 60_000);
     steps.push(`${t.service} due at ${t.to_name} ${hhmm(t.scheduled_arrival, tz)} + ${t.delay_minutes} min delay = ${hhmm(arrive, tz)}`);
     steps.push(`${t.to_name} → ${site.name}: ${drive.minutes} min, ${drive.km} km by road (${drive.source === "google" ? "Google" : "estimate"}) = ${hhmm(eta, tz)}`);
     // The train cannot be faster than driving straight from where the driver is now.
     if (ctx.driver.lat != null && ctx.driver.lng != null) {
-      const direct = await driveTime({ lat: ctx.driver.lat, lng: ctx.driver.lng }, site);
+      const direct = await driveTime(ctx.vehicle.id, { lat: ctx.driver.lat, lng: ctx.driver.lng }, site);
       const floor = new Date(Date.now() + direct.minutes * 60_000);
       steps.push(`From the driver's position now (${Math.round(kmBetween({ lat: ctx.driver.lat, lng: ctx.driver.lng }, site))} km away) it is at least ${direct.minutes} min by road`);
       if (floor > eta) eta = floor;
@@ -66,7 +66,7 @@ export async function computeEta(ctx: PickupContext): Promise<Eta> {
     basis = `${t.service} +${t.delay_minutes} min, then ${drive.minutes} min drive (${drive.source === "google" ? "Google" : "estimate"})`;
     ends_at = { name: t.to_name, lat: t.to_lat, lng: t.to_lng };
   } else if (ctx.driver.lat != null && ctx.driver.lng != null) {
-    drive = await driveTime({ lat: ctx.driver.lat, lng: ctx.driver.lng }, site);
+    drive = await driveTime(ctx.vehicle.id, { lat: ctx.driver.lat, lng: ctx.driver.lng }, site);
     eta = new Date(Date.now() + drive.minutes * 60_000);
     steps.push(`Driver's position → ${site.name}: ${drive.minutes} min, ${drive.km} km by road (${drive.source === "google" ? "Google" : "estimate"}) = ${hhmm(eta, tz)}`);
     basis = `${drive.minutes} min drive from the driver's position (${drive.source === "google" ? "Google" : "estimate"})`;

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  PositionPublisher, createOpsClient, delayPhrase, euros, fractionNear, localTime, pointAlong,
+  PositionPublisher, createOpsClient, delayPhrase, euros, fractionNear, keepPresence, localTime, pointAlong,
   type ChatMessage, type Corridor, type DriverStay, type Incident, type LngLat, type MarketJob, type Message, type OpsClient, type PickupSite,
   type Profile, type Vehicle,
 } from '@bahn/shared';
@@ -149,6 +149,8 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
       cancelled = true;
     };
   }, [db, userId, reload]);
+
+  useEffect(() => keepPresence(db), [db]);
 
   // RLS filters these streams to this driver's own rows.
   useEffect(() => {
