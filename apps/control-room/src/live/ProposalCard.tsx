@@ -2,7 +2,7 @@
 // approves or rejects on its own. Nothing here acts; approving records the
 // decision and the backend carries out that one move.
 import { useState } from 'react';
-import { euros, type Proposal, type Suggestion } from '@bahn/shared';
+import { euros, localTime, type Proposal, type Suggestion } from '@bahn/shared';
 import s from './live.module.css';
 
 const MOVE_WORD: Record<string, string> = {
@@ -12,7 +12,53 @@ const MOVE_WORD: Record<string, string> = {
   message_corridor: 'Message the corridor',
   set_vehicle_status: 'Change car status',
   escalate_incident: 'Escalate to supervisor',
+  reassign_driver: 'Replacement driver',
+  book_stay: 'Stay tonight',
+  offer_market_job: 'Job for tomorrow',
 };
+
+// The double recovery: one lane saves the car, the other looks after the
+// driver who could not make it. Shown large, side by side.
+const CAR_MOVES = new Set(['reassign_driver']);
+const DRIVER_MOVES = new Set(['book_stay', 'offer_market_job']);
+
+type Facts = { headline: string; lines: string[]; link?: { href: string; label: string } };
+
+/** The few numbers a dispatcher needs to decide a recovery move, from its payload. */
+function facts(m: Suggestion, timeZone: string): Facts | null {
+  const p = m.payload as Record<string, unknown>;
+  const str = (k: string) => (typeof p[k] === 'string' ? (p[k] as string) : null);
+  const num = (k: string) => (typeof p[k] === 'number' ? (p[k] as number) : null);
+  switch (m.suggestion_type) {
+    case 'reassign_driver': {
+      const arrives = str('arrives_at');
+      return {
+        headline: str('full_name') ?? 'Another driver',
+        lines: [
+          [num('drive_minutes') != null && `${num('drive_minutes')} min drive`, arrives && `at the dealer ${localTime(arrives, timeZone)}`]
+            .filter(Boolean).join(' · '),
+          p.makes_closing === true ? 'Makes the key handover' : p.makes_closing === false ? 'Would miss the key handover' : '',
+        ].filter(Boolean),
+      };
+    }
+    case 'book_stay': {
+      const lat = num('lat');
+      const lng = num('lng');
+      return {
+        headline: str('name') ?? 'Hotel',
+        lines: [str('address') ?? '', `${num('nights') ?? 1} night · the driver pays and claims it back`].filter(Boolean),
+        link: lat != null && lng != null ? { href: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, label: 'Open in Google Maps' } : undefined,
+      };
+    }
+    case 'offer_market_job':
+      return {
+        headline: `${str('label') ?? 'A car'} · ${str('order_ref') ?? ''}`,
+        lines: [num('fee_cents') != null ? `Fee ${euros(num('fee_cents'))} · the driver decides` : 'The driver decides'],
+      };
+    default:
+      return null;
+  }
+}
 
 const STATUS_WORD: Record<Suggestion['status'], string> = {
   pending: 'Waiting for you',
@@ -28,15 +74,25 @@ function driverText(m: Suggestion): string | null {
   return (typeof p.body === 'string' && p.body) || (typeof p.driver_message === 'string' && p.driver_message) || null;
 }
 
-export function ProposalCard({ proposal, canApproveStatus, onDecide }: {
+export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 'Europe/Berlin', nameOf }: {
   proposal: Proposal;
   /** Car status changes need a supervisor. */
   canApproveStatus: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
+  /** Where the times in a recovery happen. */
+  timeZone?: string;
+  nameOf?: (id: string | null) => string | undefined;
 }) {
   const [showChecks, setShowChecks] = useState(false);
   const done = proposal.moves.every((m) => m.status === 'executed');
   const settled = proposal.moves.every((m) => m.status !== 'pending' && m.status !== 'approved');
+  const carMoves = proposal.moves.filter((m) => CAR_MOVES.has(m.suggestion_type));
+  const driverMoves = proposal.moves.filter((m) => DRIVER_MOVES.has(m.suggestion_type));
+  const otherMoves = proposal.moves.filter((m) => !CAR_MOVES.has(m.suggestion_type) && !DRIVER_MOVES.has(m.suggestion_type));
+  const recovery = carMoves.length + driverMoves.length > 0;
+  const stranded = driverMoves.map((m) => (m.payload as Record<string, unknown>).driver_id as string | undefined).find(Boolean);
+  const strandedName = nameOf?.(stranded ?? null)?.split(' ')[0];
+  const number = (m: Suggestion) => proposal.moves.indexOf(m) + 1;
 
   return (
     <section className={s.proposal} aria-label="Agent proposal" data-done={done || undefined}>
@@ -59,11 +115,38 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide }: {
         )}
       </header>
 
-      <ol className={s.moves}>
-        {proposal.moves.map((m, i) => (
-          <Move key={m.id} move={m} n={i + 1} locked={m.suggestion_type === 'set_vehicle_status' && !canApproveStatus} onDecide={onDecide} />
-        ))}
-      </ol>
+      {recovery && (
+        <div className={s.lanes}>
+          {carMoves.length > 0 && (
+            <section className={s.lane} aria-label="The car">
+              <h4 className={s.laneTitle}>The car: keep the pickup today</h4>
+              <ol className={s.laneMoves}>
+                {carMoves.map((m) => (
+                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} />
+                ))}
+              </ol>
+            </section>
+          )}
+          {driverMoves.length > 0 && (
+            <section className={s.lane} aria-label="The driver">
+              <h4 className={s.laneTitle}>{strandedName ?? 'The driver'}: tonight and tomorrow</h4>
+              <ol className={s.laneMoves}>
+                {driverMoves.map((m) => (
+                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} />
+                ))}
+              </ol>
+            </section>
+          )}
+        </div>
+      )}
+
+      {(!recovery || otherMoves.length > 0) && (
+        <ol className={s.moves}>
+          {(recovery ? otherMoves : proposal.moves).map((m) => (
+            <Move key={m.id} move={m} n={number(m)} locked={m.suggestion_type === 'set_vehicle_status' && !canApproveStatus} onDecide={onDecide} />
+          ))}
+        </ol>
+      )}
 
       {(proposal.totalCents > 0 || done || settled) && (
         <footer className={s.proposalFoot}>
@@ -75,11 +158,13 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide }: {
   );
 }
 
-function Move({ move, n, locked, onDecide }: {
+function Move({ move, n, locked, onDecide, facts }: {
   move: Suggestion;
   n: number;
   locked: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
+  /** Set for the big recovery cards. */
+  facts?: Facts | null;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState('');
@@ -103,14 +188,22 @@ function Move({ move, n, locked, onDecide }: {
   }
 
   return (
-    <li className={s.move} data-status={move.status}>
+    <li className={s.move} data-status={move.status} data-big={facts ? true : undefined}>
       <span className={s.step} aria-hidden>{move.status === 'executed' ? '✓' : n}</span>
       <div className={s.moveBody}>
+        {facts && (
+          <div className={s.bigFacts}>
+            <p className={s.eyebrow}>{kind}</p>
+            <p className={s.bigHeadline}>{facts.headline}</p>
+            {facts.lines.map((l) => <p key={l} className={s.bigLine}>{l}</p>)}
+            {facts.link && <a className={s.textButton} href={facts.link.href} target="_blank" rel="noreferrer">{facts.link.label}</a>}
+          </div>
+        )}
         <p className={s.moveTitle}>
           <span>{title}</span>
           {move.cost_cents ? <span className={s.cost}>{euros(move.cost_cents)}</span> : null}
         </p>
-        <p className={s.meta}>{kind && kind !== title ? `${kind} · ` : ''}{STATUS_WORD[move.status]}</p>
+        <p className={s.meta}>{!facts && kind && kind !== title ? `${kind} · ` : ''}{STATUS_WORD[move.status]}</p>
         <p>{move.rationale}</p>
         {text && <blockquote className={s.quote}>{text}</blockquote>}
         {move.error && <p className={s.error}>{move.error}</p>}

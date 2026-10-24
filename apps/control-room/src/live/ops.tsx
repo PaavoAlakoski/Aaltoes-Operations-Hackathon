@@ -1,6 +1,7 @@
 // The live operations room's data: who is signed in, the cars, incidents,
 // agent proposals and messages, kept current by Supabase Realtime.
-//   Postgres Changes  incidents, messages, agent_suggestions, vehicles (RLS applies)
+//   Postgres Changes  incidents, messages, agent_suggestions, vehicles, profiles,
+//                     pickup sites, driver trips, the driver market and stays (RLS applies)
 //   Broadcast         corridor:<id>, live car positions sent by driver apps
 //   Presence          control-room, who is on shift and which incident each has open
 // Writes go through the RPCs only; the database decides what each role may do.
@@ -8,8 +9,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from '@supabase/supabase-js';
 import {
   CONTROL_ROOM_TOPIC, POSITION_EVENT, corridorTopic, createOpsClient, groupProposals,
-  type ControlRoomPresence, type Corridor, type Incident, type Kpis, type Message, type OpsClient,
-  type PositionPayload, type Profile, type Proposal, type Suggestion, type Vehicle,
+  type ControlRoomPresence, type Corridor, type DriverStay, type DriverTrip, type Incident, type Kpis, type MarketJob,
+  type Message, type OpsClient, type PickupSite, type PositionPayload, type Profile, type Proposal, type Suggestion,
+  type Vehicle,
 } from '@bahn/shared';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -40,6 +42,10 @@ interface Ops {
   proposals: Proposal[];
   messages: Message[];
   staff: Profile[];
+  sites: Map<string, PickupSite>;
+  trips: DriverTrip[];
+  jobs: MarketJob[];
+  stays: DriverStay[];
   kpis: Kpis | null;
   online: ControlRoomPresence[];
   /** The incident this person has open; shared through Presence. */
@@ -53,6 +59,8 @@ interface Ops {
   decide: (suggestionId: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
   send: (draft: MessageDraft) => Promise<void>;
   simulateFerryJam: () => Promise<Incident>;
+  /** Stages the train-delay scenario; pickup-watch raises the incident a few seconds later. */
+  simulateTrainDelay: () => Promise<{ vehicle_id: string; order_ref: string | null }>;
   /** Deletes what was sent while testing: people's messages and reports, the agent's replies and proposals. */
   clearActivity: () => Promise<{ messages: number; incidents: number; suggestions: number }>;
   setVehicleStatus: (vehicleId: string, status: Vehicle['status'], reason: string) => Promise<void>;
@@ -90,6 +98,10 @@ export function OpsProvider({ children }: { children: ReactNode }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [staff, setStaff] = useState<Profile[]>([]);
+  const [sites, setSites] = useState(new Map<string, PickupSite>());
+  const [trips, setTrips] = useState<DriverTrip[]>([]);
+  const [jobs, setJobs] = useState<MarketJob[]>([]);
+  const [stays, setStays] = useState<DriverStay[]>([]);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [online, setOnline] = useState<ControlRoomPresence[]>([]);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -141,7 +153,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         return;
       }
       const since = new Date(Date.now() - 48 * 3600_000).toISOString();
-      const [cs, vs, is, ss, ms, ps, k] = await Promise.all([
+      const [cs, vs, is, ss, ms, ps, k, sts, ts, js, ds] = await Promise.all([
         sb.from('corridors').select('*').order('id'),
         sb.from('vehicles').select('*'),
         sb.from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
@@ -149,6 +161,10 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         sb.from('messages').select('*').order('created_at', { ascending: false }).limit(200),
         sb.from('profiles').select('*').order('full_name'),
         sb.from('ops_kpis').select('*').single(),
+        sb.from('pickup_sites').select('*'),
+        sb.from('driver_trips').select('*').order('created_at', { ascending: false }).limit(100),
+        sb.from('market_jobs').select('*'),
+        sb.from('driver_stays').select('*').order('created_at', { ascending: false }).limit(100),
       ]);
       if (cancelled) return;
       setCorridors(check(cs));
@@ -158,6 +174,10 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       setMessages(check(ms));
       setStaff(check(ps));
       setKpis(k.data ?? null);
+      setSites(new Map(check(sts).map((x) => [x.id, x])));
+      setTrips(check(ts));
+      setJobs(check(js));
+      setStays(check(ds));
       setStatus('ready');
 
       // Private channels authorise with the signed-in user's token.
@@ -186,6 +206,26 @@ export function OpsProvider({ children }: { children: ReactNode }) {
           const v = p.new as Vehicle;
           setVehicles((m) => new Map(m).set(v.id, v));
           refreshKpis();
+        })
+        // A reassigned driver moves from one car to another.
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (p) => {
+          const row = p.new as Profile;
+          setStaff((l) => l.map((x) => (x.id === row.id ? row : x)));
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pickup_sites' }, (p) => {
+          if (p.eventType !== 'DELETE') setSites((m) => new Map(m).set((p.new as PickupSite).id, p.new as PickupSite));
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_trips' }, (p) => {
+          if (p.eventType === 'DELETE') setTrips((l) => l.filter((r) => r.id !== (p.old as DriverTrip).id));
+          else setTrips((l) => upsert(l, p.new as DriverTrip, byCreated));
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'market_jobs' }, (p) => {
+          if (p.eventType === 'DELETE') setJobs((l) => l.filter((r) => r.id !== (p.old as MarketJob).id));
+          else setJobs((l) => [p.new as MarketJob, ...l.filter((r) => r.id !== (p.new as MarketJob).id)]);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_stays' }, (p) => {
+          if (p.eventType === 'DELETE') setStays((l) => l.filter((r) => r.id !== (p.old as DriverStay).id));
+          else setStays((l) => upsert(l, p.new as DriverStay, byCreated));
         })
         .subscribe((s) => setLive(s === 'SUBSCRIBED' ? 'live' : s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'offline' : 'connecting'));
       channels.push(changes);
@@ -245,7 +285,8 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     const replaceIncident = (row: Incident) => setIncidents((l) => upsert(l, row, byCreated));
     return {
       status: !authReady ? 'loading' : status,
-      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, kpis, online, viewing, setViewing,
+      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online,
+      viewing, setViewing,
       signIn: async (email, password) => {
         const { error } = await sb().auth.signInWithPassword({ email, password });
         if (error) throw new Error(error.message);
@@ -270,6 +311,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         replaceIncident(row);
         return row;
       },
+      simulateTrainDelay: async () => check(await sb().rpc('simulate_train_delay')) as { vehicle_id: string; order_ref: string | null },
       clearActivity: async () => {
         const counts = check(await sb().rpc('clear_live_activity')) as { messages: number; incidents: number; suggestions: number };
         // The seeded messages and the system's own incidents stay: read back what is left.
@@ -290,7 +332,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         setVehicles((m) => new Map(m).set(v.id, v));
       },
     };
-  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, kpis, online, viewing, refreshKpis]);
+  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online, viewing, refreshKpis]);
 
   return <Ctx.Provider value={ops}>{children}</Ctx.Provider>;
 }

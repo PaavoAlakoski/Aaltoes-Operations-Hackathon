@@ -15,6 +15,21 @@ export type Message = Tables<'messages'>;
 export type Suggestion = Tables<'agent_suggestions'>;
 export type Profile = Tables<'profiles'>;
 export type Kpis = Tables<'ops_kpis'>;
+export type PickupSite = Tables<'pickup_sites'>;
+export type DriverTrip = Tables<'driver_trips'>;
+export type MarketJob = Tables<'market_jobs'>;
+export type DriverStay = Tables<'driver_stays'>;
+
+/** "17:40" in the clock of the place a time refers to. */
+export function localTime(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(iso));
+}
+
+/** "2 h 35 min", "40 min". */
+export function minutesPhrase(min: number): string {
+  const m = Math.round(Math.abs(min));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+}
 
 export function createOpsClient(url: string, publishableKey: string, opts: { storageKey?: string; persist?: boolean } = {}): OpsClient {
   return createClient<Database>(url, publishableKey, {

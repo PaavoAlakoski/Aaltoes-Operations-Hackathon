@@ -107,6 +107,7 @@ a.row:hover { background: var(--hover); }
 .detailGrid { display: grid; gap: var(--s5); grid-template-columns: 1fr; }
 @media (min-width: 960px) {
   .detailGrid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .detailGrid[data-wide] { grid-template-columns: 1fr; }
 }
 
 /* Proposal */
@@ -133,6 +134,47 @@ a.row:hover { background: var(--hover); }
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2);
   padding: var(--s3) var(--s4); border-top: 1px solid var(--line); font-size: var(--size-meta);
 }
+
+/* Is the driver in time for the pickup? Meant to be read from across the room. */
+.inTime {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5);
+  margin-bottom: var(--s4); padding: var(--s4) var(--s5); border-radius: var(--radius);
+  border: 2px solid var(--line-strong); background: var(--hover);
+}
+.inTime[data-state='in'] { border-color: var(--green); background: var(--green); color: var(--birch); }
+.inTime[data-state='late'] { border-color: var(--red); background: var(--red); color: var(--birch); }
+.inTimeWord {
+  font-family: var(--font-title); font-weight: var(--weight-bold); line-height: 1.1;
+  font-size: clamp(32px, 6vw, 52px); text-transform: uppercase; letter-spacing: 0.01em;
+}
+.inTimeFacts { display: grid; gap: var(--s1); min-width: 0; }
+.inTimeLine { font-weight: var(--weight-bold); font-size: var(--size-title); line-height: 1.25; overflow-wrap: anywhere; }
+.inTimeNumbers { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); font-size: var(--size-title); line-height: 1.3; }
+.inTimeBasis { font-size: var(--size-meta); opacity: 0.85; }
+.inTimePill {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--size-meta);
+  font-weight: var(--weight-bold); color: var(--birch); background: var(--warm-grey);
+}
+.inTimePill[data-state='in'] { background: var(--green); }
+.inTimePill[data-state='late'] { background: var(--red); }
+
+/* The double recovery: the car on one side, the stranded driver on the other. */
+.lanes { display: grid; gap: var(--s4); padding: var(--s4); grid-template-columns: 1fr; }
+@media (min-width: 720px) {
+  .lanes { grid-template-columns: 1fr 1fr; }
+}
+.lane { min-width: 0; display: grid; align-content: start; gap: var(--s3); }
+.laneTitle { font-size: var(--size-body); font-weight: var(--weight-bold); }
+.laneMoves { display: grid; gap: var(--s3); }
+.move[data-big] {
+  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s4); background: var(--bg);
+}
+.move[data-big]:last-child { border-bottom: 1px solid var(--line-strong); }
+.move[data-big][data-status='executed'] { border-color: var(--green); }
+.bigFacts { display: grid; gap: var(--s1); margin-bottom: var(--s2); }
+.bigHeadline { font-family: var(--font-title); font-size: var(--size-title); font-weight: var(--weight-bold); line-height: 1.2; overflow-wrap: anywhere; }
+.bigLine { font-size: var(--size-body); }
+.move[data-big] .primary, .move[data-big] .button { min-height: 44px; padding: 8px 20px; font-size: var(--size-body); }
 
 /* Messages */
 .thread { min-width: 0; }

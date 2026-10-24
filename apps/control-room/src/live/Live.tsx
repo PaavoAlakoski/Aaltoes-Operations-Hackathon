@@ -7,6 +7,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { delayPhrase, type Incident, type Vehicle } from '@bahn/shared';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { ProposalCard } from './ProposalCard';
+import { InTimeBanner, InTimePill } from './InTime';
 import { opsConfigured, useOps } from './ops';
 import s from './live.module.css';
 
@@ -131,6 +132,17 @@ function Room() {
     }
   }
 
+  // No incident yet: pickup-watch raises it once it sees the driver will be late.
+  async function simulateTrain() {
+    setSimErr(null);
+    try {
+      const { order_ref } = await ops.simulateTrainDelay();
+      if (order_ref) navigate(`/orders/${order_ref}`);
+    } catch (e) {
+      setSimErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <>
       <div className={s.grid}>
@@ -153,6 +165,9 @@ function Room() {
           <div className={s.queueFoot}>
             <button type="button" className={s.button} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
               Simulate ferry traffic jam
+            </button>
+            <button type="button" className={s.button} onClick={simulateTrain} title="Stage the Munich pickup: the driver's ICE is 3 h late and the dealer hands keys over in person only">
+              Simulate train delay
             </button>
             <ClearActivity />
           </div>
@@ -250,6 +265,7 @@ function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; ve
         <span className={s.meta}>
           {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {minutesAgo(i.created_at)}
           {pending > 0 && <> · <strong className={s.attention}>{pending} to decide</strong></>}
+          {i.status !== 'resolved' && <> <InTimePill vehicle={vehicle} /></>}
           {watchers.length > 0 && <> · {watchers.map((w) => w.name.split(' ')[0]).join(', ')} looking</>}
         </span>
       </span>
@@ -303,6 +319,8 @@ export function OrderLive({ reference }: { reference: string }) {
         </p>
       </div>
 
+      <InTimeBanner vehicle={vehicle} />
+
       {incidents.length > 1 && (
         <ul className={s.tabs} aria-label="Incidents on this car">
           {incidents.map((i) => (
@@ -332,6 +350,8 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
   const staff = ops.staff.filter((p) => p.role !== 'driver');
   const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
   const proposals = ops.proposals.filter((p) => p.incidentId === i.id);
+  // A double recovery's two lanes need the full width; the conversation goes below.
+  const wide = proposals.some((p) => p.moves.some((m) => ['reassign_driver', 'book_stay', 'offer_market_job'].includes(m.suggestion_type)));
   const [note, setNote] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const name = (id: string | null) => ops.staff.find((p) => p.id === id)?.full_name;
@@ -379,7 +399,7 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
       </header>
       {err && <p className={s.error} role="alert">{err}</p>}
 
-      <div className={s.detailGrid}>
+      <div className={s.detailGrid} data-wide={wide || undefined}>
         <div>
           {proposals.length === 0 ? (
             <Empty title={i.source === 'agent' ? 'Raised by the agent.' : 'The agent is looking into this.'}>
@@ -387,7 +407,14 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
             </Empty>
           ) : (
             proposals.map((p) => (
-              <ProposalCard key={p.groupId} proposal={p} canApproveStatus={ops.profile?.role === 'supervisor'} onDecide={ops.decide} />
+              <ProposalCard
+                key={p.groupId}
+                proposal={p}
+                canApproveStatus={ops.profile?.role === 'supervisor'}
+                onDecide={ops.decide}
+                timeZone={(vehicle.pickup_site_id && ops.sites.get(vehicle.pickup_site_id)?.timezone) || undefined}
+                nameOf={name}
+              />
             ))
           )}
         </div>

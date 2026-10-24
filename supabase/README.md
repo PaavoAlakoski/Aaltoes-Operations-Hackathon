@@ -17,6 +17,8 @@ anyone). The rest is the live operations backend and does not touch them.
 | `…150246_incident_source_default` | `incidents.source` has a default (the trigger always sets it) |
 | `…151538_pg_net_schema` | `pg_net` lives in `extensions`, not the API schema |
 | `…151921_ops_scenario_messages` | the scenario also clears the previous run's messages, so the agent starts from the same world |
+| `…183518_train_delay` | pickup sites, driver trips and positions, the driver market, driver stays; the pickup-watch cron; reassign, stay and job moves; `answer_market_job`; the train-delay scenario |
+| `…184616_recovery_messages` | the agent's own driver message replaces the standard text instead of repeating it |
 
 Vocabulary: the brief's "lines" are **corridors** (routes cars are driven along, some with a ferry);
 "vehicles" are **the cars being delivered**, one driver each.
@@ -71,6 +73,28 @@ incident inserted ──trigger (pg_net, async)──▶ agent-triage ──▶ 
 person approves a move (decide_suggestion) ──trigger──▶ execute-suggestion ──▶ apply_suggestion
                                                                     (whitelisted moves only, audit_log)
 ```
+
+### The train-delay recovery
+
+```
+pg_cron (5 min), simulate_train_delay, a reassign ──▶ pickup-watch
+   driver's trip + delay, then Google drive time to the dealer, against the key handover
+   ──▶ vehicles.pickup_eta / pickup_in_time (the big IN TIME / WON'T MAKE IT banner)
+   ──▶ late and no open delay incident: raises one (source system) ──▶ agent-triage
+          check_driver_eta, check_key_pickup, notify_driver (sent at once: it only informs)
+          find_replacement_driver (Google Route Matrix), find_stay_near (Google Places),
+          find_market_jobs_near ──▶ reassign_driver + book_stay + offer_market_job
+```
+
+- `notify_driver` is the one thing the agent does without a person: it tells the driver they won't make the
+  pickup. The replacement, the stay and the job offer wait for approval like every other move.
+- Google: set the `GOOGLE_MAPS_API_KEY` function secret (Routes API and Places API (New) enabled). Without it,
+  drive times fall back to a straight-line estimate and the agent finds no hotels; its checks say which was used.
+- `simulate_train_delay()` stages veh-01024 at the Munich dealer (keys in person only, closing in 90 min) with
+  Elias Halverick on an ICE 180 min late. It raises no incident itself; pickup-watch has to notice. Re-running it
+  undoes the last run, including a reassign. The three standby drivers near Munich come from `seed.sql`.
+- The driver app refreshes its session when control moves a driver onto or off a car, because RLS reads the car
+  from the token.
 
 - The functions authenticate the trigger with a secret that is generated in Vault by the migration and
   never leaves the database (`verify_agent_secret`), so there is nothing to copy into function env.

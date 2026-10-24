@@ -1,7 +1,7 @@
 -- Demo data for the live operations backend: five corridors, fifteen cars
--- from the dataset (in transit or waiting for pickup), a driver on each, two
--- dispatchers and a supervisor. Generated once from dataset/data; positions
--- are city-level approximations. Safe to run again: it replaces the demo rows.
+-- from the dataset (in transit or waiting for pickup), a driver on each, three
+-- standby drivers near Munich, two dispatchers and a supervisor. Generated
+-- once from dataset/data; positions are city-level approximations. Safe to run again: it replaces the demo rows.
 --
 -- Every demo user gets the same password: the setting seed.password if it is
 -- set in this session, else the local-only default in supabase/README.md. On
@@ -62,6 +62,9 @@ from (values
   ('10000000-0000-4000-8000-000000000013', 'cole.mervalen@demo.bahn.test', 'Cole Mervalen'),
   ('10000000-0000-4000-8000-000000000014', 'selma.talverick@demo.bahn.test', 'Selma Talverick'),
   ('10000000-0000-4000-8000-000000000015', 'elias.halverick@demo.bahn.test', 'Elias Halverick'),
+  ('10000000-0000-4000-8000-000000000016', 'jonas.ekvall@demo.bahn.test', 'Jonas Ekvall'),
+  ('10000000-0000-4000-8000-000000000017', 'mila.sorvenik@demo.bahn.test', 'Mila Sorvenik'),
+  ('10000000-0000-4000-8000-000000000018', 'ida.brennholt@demo.bahn.test', 'Ida Brennholt'),
   ('20000000-0000-4000-8000-000000000001', 'mira.kestelund@demo.bahn.test', 'Mira Kestelund'),
   ('20000000-0000-4000-8000-000000000002', 'oskar.brennvik@demo.bahn.test', 'Oskar Brennvik'),
   ('30000000-0000-4000-8000-000000000001', 'helena.starkwood@demo.bahn.test', 'Helena Starkwood')
@@ -86,6 +89,12 @@ update public.profiles set role = 'driver', vehicle_id = 'veh-00324', driver_ref
 update public.profiles set role = 'driver', vehicle_id = 'veh-00735', driver_ref = 'drv-260' where id = '10000000-0000-4000-8000-000000000013';
 update public.profiles set role = 'driver', vehicle_id = 'veh-00071', driver_ref = 'drv-275' where id = '10000000-0000-4000-8000-000000000014';
 update public.profiles set role = 'driver', vehicle_id = 'veh-01024', driver_ref = 'drv-249' where id = '10000000-0000-4000-8000-000000000015';
+-- Standby drivers with no car, near Munich: the train-delay scenario's replacements.
+update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-301', availability = 'available', lat = 48.4029, lng = 11.7488, position_at = now() where id = '10000000-0000-4000-8000-000000000016';
+update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-302', availability = 'available', lat = 48.3705, lng = 10.8978, position_at = now() where id = '10000000-0000-4000-8000-000000000017';
+update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-303', availability = 'available', lat = 48.7665, lng = 11.4258, position_at = now() where id = '10000000-0000-4000-8000-000000000018';
+update public.profiles set availability = 'on_job' where role = 'driver' and vehicle_id is not null;
+update public.vehicles set pickup_site_id = 'site-muc-isartal' where id = 'veh-01024';
 update public.profiles set role = 'dispatcher', vehicle_id = null, driver_ref = null where id = '20000000-0000-4000-8000-000000000001';
 update public.profiles set role = 'dispatcher', vehicle_id = null, driver_ref = null where id = '20000000-0000-4000-8000-000000000002';
 update public.profiles set role = 'supervisor', vehicle_id = null, driver_ref = null where id = '30000000-0000-4000-8000-000000000001';

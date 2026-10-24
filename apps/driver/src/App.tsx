@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
-  PositionPublisher, createOpsClient, delayPhrase, fractionNear, pointAlong,
-  type Corridor, type Incident, type LngLat, type Message, type OpsClient, type Profile, type Vehicle,
+  PositionPublisher, createOpsClient, delayPhrase, euros, fractionNear, localTime, pointAlong,
+  type Corridor, type DriverStay, type Incident, type LngLat, type MarketJob, type Message, type OpsClient, type PickupSite,
+  type Profile, type Vehicle,
 } from '@bahn/shared';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -101,8 +102,14 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
   const [shift, setShift] = useState<{ shift_start: string; shift_end: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [site, setSite] = useState<PickupSite | null>(null);
+  const [stays, setStays] = useState<DriverStay[]>([]);
+  const [offers, setOffers] = useState<MarketJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'car' | 'report' | 'inbox'>('car');
+  // Bumped when control moves this driver onto or off a car.
+  const [reload, setReload] = useState(0);
+  const carId = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,32 +118,48 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
       if (me.error) throw new Error(me.error.message);
       if (cancelled) return;
       setProfile(me.data);
-      if (!me.data.vehicle_id) return;
-      const [v, a, m, i] = await Promise.all([
-        db.from('vehicles').select('*').eq('id', me.data.vehicle_id).single(),
-        db.from('assignments').select('shift_start,shift_end').order('shift_start', { ascending: false }).limit(1).maybeSingle(),
+      carId.current = me.data.vehicle_id;
+      // Messages, stays and job offers reach a driver with or without a car.
+      const [m, st, jo] = await Promise.all([
         db.from('messages').select('*').order('created_at', { ascending: false }).limit(50),
+        db.from('driver_stays').select('*').order('created_at', { ascending: false }).limit(5),
+        db.from('market_jobs').select('*').eq('offered_to', userId),
+      ]);
+      if (cancelled) return;
+      setMessages(m.data ?? []);
+      setStays(st.data ?? []);
+      setOffers(jo.data ?? []);
+      if (!me.data.vehicle_id) {
+        setVehicle(null);
+        return;
+      }
+      const [v, a, i] = await Promise.all([
+        db.from('vehicles').select('*').eq('id', me.data.vehicle_id).single(),
+        db.from('assignments').select('shift_start,shift_end').eq('driver_id', userId).order('shift_start', { ascending: false }).limit(1).maybeSingle(),
         db.from('incidents').select('*').order('created_at', { ascending: false }).limit(20),
       ]);
       if (v.error) throw new Error(v.error.message);
       if (cancelled) return;
       setVehicle(v.data);
       setShift(a.data);
-      setMessages(m.data ?? []);
       setIncidents(i.data ?? []);
-      const c = await db.from('corridors').select('*').eq('id', v.data.corridor_id).single();
-      if (!cancelled && c.data) setCorridor(c.data);
+      const [c, s] = await Promise.all([
+        db.from('corridors').select('*').eq('id', v.data.corridor_id).single(),
+        v.data.pickup_site_id ? db.from('pickup_sites').select('*').eq('id', v.data.pickup_site_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      if (cancelled) return;
+      if (c.data) setCorridor(c.data);
+      setSite(s.data);
     })().catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
-  }, [db, userId]);
+  }, [db, userId, reload]);
 
   // RLS filters these streams to this driver's own rows.
   useEffect(() => {
-    if (!vehicle) return;
     const ch = db
-      .channel('driver-db')
+      .channel(`driver-db-${reload}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) =>
         setMessages((l) => [p.new as Message, ...l.filter((x) => x.id !== (p.new as Message).id)]))
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (p) =>
@@ -147,11 +170,28 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
         if (row?.id) setIncidents((l) => [row, ...l.filter((x) => x.id !== row.id)]);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vehicles' }, (p) => setVehicle(p.new as Vehicle))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_stays' }, (p) => {
+        if (p.eventType === 'DELETE') return setStays((l) => l.filter((x) => x.id !== (p.old as DriverStay).id));
+        setStays((l) => [p.new as DriverStay, ...l.filter((x) => x.id !== (p.new as DriverStay).id)]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'market_jobs' }, (p) => {
+        const row = p.new as MarketJob;
+        if (!row?.id) return;
+        setOffers((l) => (row.offered_to === userId ? [row, ...l.filter((x) => x.id !== row.id)] : l.filter((x) => x.id !== row.id)));
+      })
+      // Control gave this driver a car, or took one away. The token carries the
+      // car id that RLS reads, so refresh it before loading again.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async (p) => {
+        const row = p.new as Profile;
+        if (row.id !== userId || row.vehicle_id === carId.current) return;
+        await db.auth.refreshSession();
+        setReload((n) => n + 1);
+      })
       .subscribe();
     return () => {
       db.removeChannel(ch);
     };
-  }, [db, vehicle?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [db, userId, reload]);
 
   const unread = messages.filter((m) => !m.read_at && m.from_user !== userId && !m.to_corridor).length;
   const signOut = () => db.auth.signOut();
@@ -161,8 +201,19 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
   if (profile.role !== 'driver') {
     return <Shell onSignOut={signOut}><p className="card">This app is for drivers. Staff sign in on Needs you in the control room app.</p></Shell>;
   }
+  const tonight = <Tonight db={db} stays={stays} offers={offers} setOffers={setOffers} />;
   if (!profile.vehicle_id) {
-    return <Shell onSignOut={signOut}><p className="card">You are not on a car yet. Control will put you on one.</p></Shell>;
+    // A driver with no car still gets control's messages, a booked stay and job offers.
+    return (
+      <Shell onSignOut={signOut}>
+        <p className="hello">Hi {profile.full_name.split(' ')[0]}</p>
+        <div className="stack">
+          {tonight}
+          {stays.length === 0 && offers.length === 0 && <p className="card">You are not on a car right now. Control will put you on one.</p>}
+          <Inbox db={db} userId={userId} messages={messages} incidents={incidents} setMessages={setMessages} />
+        </div>
+      </Shell>
+    );
   }
   if (!vehicle) return <Shell onSignOut={signOut}><p className="meta">Loading your car…</p></Shell>;
 
@@ -176,7 +227,12 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
           Inbox{unread > 0 && <span className="badge" aria-label={`${unread} unread`}>{unread}</span>}
         </button>
       </nav>
-      {tab === 'car' && <CarView db={db} vehicle={vehicle} corridor={corridor} shift={shift} incidents={incidents} />}
+      {tab === 'car' && (
+        <div className="stack">
+          {tonight}
+          <CarView db={db} vehicle={vehicle} corridor={corridor} shift={shift} incidents={incidents} site={site} />
+        </div>
+      )}
       {tab === 'report' && <ReportView db={db} vehicle={vehicle} onDone={() => setTab('car')} />}
       {tab === 'inbox' && <Inbox db={db} userId={userId} messages={messages} incidents={incidents} setMessages={setMessages} />}
     </Shell>
@@ -192,12 +248,87 @@ function time(iso: string) {
   return new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function CarView({ db, vehicle, corridor, shift, incidents }: {
+/** Google Maps directions to a point; opens the Maps app on a phone. */
+const directions = (lat: number, lng: number) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+/** Message text with its links made tappable (the agent sends Maps links). */
+function Linked({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/\S+)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p)
+          ? <a key={i} href={p} target="_blank" rel="noreferrer">{p.includes('google.com/maps') ? 'Open in Google Maps' : p}</a>
+          : p)}
+    </>
+  );
+}
+
+/** Tonight's stay and any job control has offered, with a yes or no. */
+function Tonight({ db, stays, offers, setOffers }: {
+  db: OpsClient; stays: DriverStay[]; offers: MarketJob[]; setOffers: (f: (l: MarketJob[]) => MarketJob[]) => void;
+}) {
+  const [err, setErr] = useState<string | null>(null);
+  const stay = stays[0];
+  async function answer(job: MarketJob, accept: boolean) {
+    setErr(null);
+    const { data, error } = await db.rpc('answer_market_job', { p_job_id: job.id, p_accept: accept });
+    if (error) return setErr(error.message);
+    setOffers((l) => l.map((x) => (x.id === data.id ? data : x)));
+  }
+  if (!stay && offers.length === 0) return null;
+  return (
+    <>
+      {stay && (
+        <section className="card stack">
+          <p className="meta">Tonight</p>
+          <h1 className="title">{stay.name}</h1>
+          <p>{stay.address}</p>
+          <p className="meta">{stay.nights} night{stay.nights > 1 ? 's' : ''} · pay at the hotel and claim it back with the receipt</p>
+          {stay.lat != null && stay.lng != null && (
+            <a className="primary big" href={directions(stay.lat, stay.lng)} target="_blank" rel="noreferrer">Navigate to the hotel</a>
+          )}
+        </section>
+      )}
+      {offers.map((j) => (
+        <section key={j.id} className="card stack">
+          <p className="meta">A job for tomorrow, if you want it</p>
+          <h1 className="title">{j.label}</h1>
+          <p>{j.pickup_name}, {j.pickup_city} → {j.delivery_city}</p>
+          <p className="meta">
+            Pickup {localTime(j.window_start, j.timezone)}–{localTime(j.window_end, j.timezone)} local · {euros(j.fee_cents)} · <span className="mono">{j.order_ref}</span>
+          </p>
+          {j.status === 'offered' ? (
+            <div className="segmented" role="group" aria-label="Take this job?">
+              <button type="button" onClick={() => answer(j, true)}>Accept</button>
+              <button type="button" onClick={() => answer(j, false)}>Decline</button>
+            </div>
+          ) : (
+            <p className={j.status === 'accepted' ? 'ok' : 'meta'}>{j.status === 'accepted' ? 'You accepted. Control will confirm.' : 'You declined.'}</p>
+          )}
+        </section>
+      ))}
+      {err && <p className="error" role="alert">{err}</p>}
+    </>
+  );
+}
+
+function CarView({ db, vehicle, corridor, shift, incidents, site }: {
   db: OpsClient; vehicle: Vehicle; corridor: Corridor | null; shift: { shift_start: string; shift_end: string } | null; incidents: Incident[];
+  site: PickupSite | null;
 }) {
   const open = incidents.filter((i) => i.status !== 'resolved');
   return (
     <div className="stack">
+      {vehicle.status === 'waiting_pickup' && site && (
+        <section className="card stack">
+          <p className="meta">Pick up</p>
+          <h1 className="title">{site.name}</h1>
+          <p>{site.city}{site.closes_at && <> · keys {site.key_handover === 'key_box' ? 'from the key box' : 'in person'} until <strong>{localTime(site.closes_at, site.timezone)}</strong> local</>}</p>
+          {site.access_note && <p className="meta">{site.access_note}</p>}
+          <a className="primary big" href={directions(site.lat, site.lng)} target="_blank" rel="noreferrer">Navigate to the dealer</a>
+        </section>
+      )}
       <section className="card">
         <p className="meta">Your car</p>
         <h1 className="title">{vehicle.label}</h1>
@@ -367,7 +498,7 @@ function Inbox({ db, userId, messages, incidents, setMessages }: {
                 {m.from_user === userId ? 'You' : m.from_user ? 'Control' : 'Control (agent)'}
                 {m.to_corridor ? ' · to everyone on your route' : ''} · {time(m.created_at)}
               </p>
-              <p>{m.body}</p>
+              <p><Linked text={m.body} /></p>
             </li>
           ))}
         </ol>

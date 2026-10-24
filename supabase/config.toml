@@ -51,3 +51,6 @@ verify_jwt = false
 
 [functions.execute-suggestion]
 verify_jwt = false
+
+[functions.pickup-watch]
+verify_jwt = false

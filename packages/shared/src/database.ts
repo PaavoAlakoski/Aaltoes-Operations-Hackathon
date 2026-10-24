@@ -260,6 +260,112 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_stays: {
+        Row: {
+          address: string
+          created_at: string
+          driver_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          nights: number
+          place_id: string
+          suggestion_id: string | null
+        }
+        Insert: {
+          address?: string
+          created_at?: string
+          driver_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          nights?: number
+          place_id: string
+          suggestion_id?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          driver_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          nights?: number
+          place_id?: string
+          suggestion_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_stays_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_trips: {
+        Row: {
+          created_at: string
+          delay_minutes: number
+          driver_id: string
+          from_name: string
+          id: string
+          mode: string
+          scheduled_arrival: string
+          service: string
+          simulated: boolean
+          status: string
+          to_lat: number
+          to_lng: number
+          to_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delay_minutes?: number
+          driver_id: string
+          from_name: string
+          id?: string
+          mode?: string
+          scheduled_arrival: string
+          service: string
+          simulated?: boolean
+          status?: string
+          to_lat: number
+          to_lng: number
+          to_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delay_minutes?: number
+          driver_id?: string
+          from_name?: string
+          id?: string
+          mode?: string
+          scheduled_arrival?: string
+          service?: string
+          simulated?: boolean
+          status?: string
+          to_lat?: number
+          to_lng?: number
+          to_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferry_bookings: {
         Row: {
           created_at: string
@@ -523,6 +629,71 @@ export type Database = {
           },
         ]
       }
+      market_jobs: {
+        Row: {
+          delivery_city: string
+          fee_cents: number
+          id: string
+          label: string
+          offer_suggestion_id: string | null
+          offered_to: string | null
+          order_ref: string
+          pickup_city: string
+          pickup_lat: number
+          pickup_lng: number
+          pickup_name: string
+          status: string
+          timezone: string
+          updated_at: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          delivery_city: string
+          fee_cents: number
+          id: string
+          label: string
+          offer_suggestion_id?: string | null
+          offered_to?: string | null
+          order_ref: string
+          pickup_city: string
+          pickup_lat: number
+          pickup_lng: number
+          pickup_name: string
+          status?: string
+          timezone: string
+          updated_at?: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          delivery_city?: string
+          fee_cents?: number
+          id?: string
+          label?: string
+          offer_suggestion_id?: string | null
+          offered_to?: string | null
+          order_ref?: string
+          pickup_city?: string
+          pickup_lat?: number
+          pickup_lng?: number
+          pickup_name?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_jobs_offered_to_fkey"
+            columns: ["offered_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -598,6 +769,45 @@ export type Database = {
           },
         ]
       }
+      pickup_sites: {
+        Row: {
+          access_note: string
+          city: string
+          closes_at: string | null
+          id: string
+          key_handover: string
+          lat: number
+          lng: number
+          name: string
+          opening_hours: Json
+          timezone: string
+        }
+        Insert: {
+          access_note?: string
+          city: string
+          closes_at?: string | null
+          id: string
+          key_handover?: string
+          lat: number
+          lng: number
+          name: string
+          opening_hours?: Json
+          timezone: string
+        }
+        Update: {
+          access_note?: string
+          city?: string
+          closes_at?: string | null
+          id?: string
+          key_handover?: string
+          lat?: number
+          lng?: number
+          name?: string
+          opening_hours?: Json
+          timezone?: string
+        }
+        Relationships: []
+      }
       ports: {
         Row: {
           id: string
@@ -624,28 +834,40 @@ export type Database = {
       }
       profiles: {
         Row: {
+          availability: string
           created_at: string
           driver_ref: string | null
           full_name: string
           id: string
+          lat: number | null
+          lng: number | null
+          position_at: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
           vehicle_id: string | null
         }
         Insert: {
+          availability?: string
           created_at?: string
           driver_ref?: string | null
           full_name?: string
           id: string
+          lat?: number | null
+          lng?: number | null
+          position_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
           vehicle_id?: string | null
         }
         Update: {
+          availability?: string
           created_at?: string
           driver_ref?: string | null
           full_name?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
+          position_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
           vehicle_id?: string | null
@@ -694,6 +916,11 @@ export type Database = {
           lng: number | null
           order_id: string | null
           order_ref: string | null
+          pickup_checked_at: string | null
+          pickup_eta: string | null
+          pickup_eta_basis: string | null
+          pickup_in_time: boolean | null
+          pickup_site_id: string | null
           registration: string | null
           status: Database["public"]["Enums"]["vehicle_status"]
           updated_at: string
@@ -710,6 +937,11 @@ export type Database = {
           lng?: number | null
           order_id?: string | null
           order_ref?: string | null
+          pickup_checked_at?: string | null
+          pickup_eta?: string | null
+          pickup_eta_basis?: string | null
+          pickup_in_time?: boolean | null
+          pickup_site_id?: string | null
           registration?: string | null
           status?: Database["public"]["Enums"]["vehicle_status"]
           updated_at?: string
@@ -726,6 +958,11 @@ export type Database = {
           lng?: number | null
           order_id?: string | null
           order_ref?: string | null
+          pickup_checked_at?: string | null
+          pickup_eta?: string | null
+          pickup_eta_basis?: string | null
+          pickup_in_time?: boolean | null
+          pickup_site_id?: string | null
           registration?: string | null
           status?: Database["public"]["Enums"]["vehicle_status"]
           updated_at?: string
@@ -736,6 +973,13 @@ export type Database = {
             columns: ["corridor_id"]
             isOneToOne: false
             referencedRelation: "corridors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_pickup_site_id_fkey"
+            columns: ["pickup_site_id"]
+            isOneToOne: false
+            referencedRelation: "pickup_sites"
             referencedColumns: ["id"]
           },
         ]
@@ -761,16 +1005,27 @@ export type Database = {
         Args: { p_incident_id: string }
         Returns: Database["public"]["Tables"]["incidents"]["Row"]
       }
+      agent_available_drivers: { Args: { p_vehicle_id: string }; Returns: Json }
       agent_check_pickup_feasibility: {
         Args: { p_vehicle_id: string }
         Returns: Json
       }
       agent_find_hotel_near_port: { Args: { p_port_id: string }; Returns: Json }
+      agent_find_market_jobs: {
+        Args: { p_after: string; p_lat: number; p_lng: number }
+        Returns: Json
+      }
       agent_find_next_ferry: {
         Args: { p_from_port: string; p_not_before: string }
         Returns: Json
       }
       agent_incident_context: { Args: { p_incident_id: string }; Returns: Json }
+      agent_pickup_context: { Args: { p_vehicle_id: string }; Returns: Json }
+      agent_pickups_to_watch: { Args: never; Returns: string[] }
+      answer_market_job: {
+        Args: { p_accept: boolean; p_job_id: string }
+        Returns: Database["public"]["Tables"]["market_jobs"]["Row"]
+      }
       apply_suggestion: {
         Args: { p_suggestion_id: string }
         Returns: Database["public"]["Tables"]["agent_suggestions"]["Row"]
@@ -833,6 +1088,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Tables"]["incidents"]["Row"]
       }
+      simulate_train_delay: { Args: never; Returns: Json }
       undo_decision: {
         Args: { p_id: string }
         Returns: Database["public"]["Tables"]["decisions"]["Row"]

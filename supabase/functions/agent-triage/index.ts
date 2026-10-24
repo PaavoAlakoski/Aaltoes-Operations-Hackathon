@@ -2,16 +2,20 @@
 // Reads the situation through the agent_* SQL functions, lets Claude (through
 // OpenRouter) look up what it needs, and stores its proposal as moves in
 // agent_suggestions for a person to approve one by one. It never carries
-// anything out itself.
+// anything out itself. One exception: notify_driver sends a message at once.
+// It only informs the driver ("you will not make the pickup"); it changes
+// nothing.
 //
 // Any failure (no key, the API down, a refusal, a malformed proposal) is
 // written to audit_log and the incident simply has no suggestion; nothing
 // here can block or undo the incident itself.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
+import { driveTimes, hotelsNear } from "../_shared/google.ts";
+import { computeEta, hhmm, type PickupContext } from "../_shared/pickup.ts";
 
 const MODEL = Deno.env.get("OPENROUTER_MODEL") ?? "anthropic/claude-opus-5.5";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MAX_TURNS = 8;
+const MAX_TURNS = 12;
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -28,6 +32,18 @@ Work like this:
 - If the car is booked on a ferry, call check_pickup_feasibility. If it will miss check-in, find the next ferry it
   can make (not_before = its ETA at the port) and, if that ferry leaves the next day, a cheap hotel near the port
   for the driver. That is a two-move recovery: rebook the ferry, then book the hotel.
+- If the incident is a delay on a car waiting for pickup (the driver is still travelling to the dealer), this is the
+  train-delay recovery:
+  1. Call check_driver_eta, then check_key_pickup.
+  2. Call notify_driver once: tell the driver plainly that they will not make the pickup in time (their ETA and the
+     closing time), whether the keys can still be collected after closing, and that control is arranging the rest.
+     It is sent immediately; do not repeat it as a move.
+  3. If the keys cannot be collected after closing: call find_replacement_driver and propose reassign_driver for the
+     fastest driver who makes it before closing (makes_closing true). Then call find_stay_near at ends_at from
+     check_driver_eta (where the stranded driver will be tonight) and propose book_stay for one night at the nearest
+     suitable hotel. Then call find_market_jobs_near the same point with after = tomorrow 06:00 local, and propose
+     offer_market_job for the best job (nearest, sensible window). Three moves, in that order.
+  4. If the keys can be collected late (key box), propose only a message_vehicle saying what to do.
 - Otherwise propose the smallest set of moves that helps: usually one message to the driver, sometimes a corridor
   message, a status change, or escalation to a supervisor for anything safety-related (accident, damage).
 - Finish by calling submit_proposal exactly once.
@@ -88,6 +104,81 @@ const tools: ToolDef[] = [
     },
   },
   {
+    name: "check_driver_eta",
+    description:
+      "For a car waiting for pickup: when its driver can be at the dealer (their train with its delay, then the Google drive time from the arrival station; or the drive time from their position), against the key handover. Returns eta, in_time, minutes_late, the steps of the calculation, and ends_at: where the driver will be tonight.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { vehicle_id: { type: "string" } },
+      required: ["vehicle_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "check_key_pickup",
+    description:
+      "The pickup dealer's opening hours, today's closing time, how keys are handed over (staff_only: in person, nothing after closing; key_box: collection after closing is possible) and its access note.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { vehicle_id: { type: "string" } },
+      required: ["vehicle_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "notify_driver",
+    description:
+      "Send the car's driver a message right away, without waiting for control. Only to inform them, e.g. that they will not make the pickup and whether keys can be collected late. Once per incident.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { message: { type: "string" } },
+      required: ["message"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "find_replacement_driver",
+    description:
+      "Free drivers near the car's pickup dealer with their Google drive time to it, arrival time and whether they make the key handover before closing. Fastest first.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { vehicle_id: { type: "string" } },
+      required: ["vehicle_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "find_stay_near",
+    description: "Hotels near a point (Google Places), nearest first, with place_id, address and rating. No prices.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { lat: { type: "number" }, lng: { type: "number" } },
+      required: ["lat", "lng"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "find_market_jobs_near",
+    description:
+      "Open jobs on the driver market with a pickup within 150 km of a point and a pickup window starting at or after `after`, nearest first, fee in cents.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        lat: { type: "number" },
+        lng: { type: "number" },
+        after: { type: "string", description: "ISO 8601 timestamp" },
+      },
+      required: ["lat", "lng", "after"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "submit_proposal",
     description: "Submit your proposal for control to decide on. Call once, last.",
     strict: true,
@@ -103,13 +194,22 @@ const tools: ToolDef[] = [
             properties: {
               type: {
                 type: "string",
-                enum: ["rebook_ferry", "book_hotel", "message_vehicle", "message_corridor", "set_vehicle_status", "escalate_incident"],
+                enum: [
+                  "rebook_ferry", "book_hotel", "message_vehicle", "message_corridor", "set_vehicle_status", "escalate_incident",
+                  "reassign_driver", "book_stay", "offer_market_job",
+                ],
               },
               title: { type: "string" },
               rationale: { type: "string", description: "One sentence: why this move." },
-              message: { type: ["string", "null"], description: "Text for the driver (or corridor). Required for message moves; optional for rebook/hotel." },
+              message: {
+                type: ["string", "null"],
+                description: "Text for the driver (or corridor). Required for message moves; optional for the others, added to the standard message.",
+              },
               departure_id: { type: ["string", "null"] },
               hotel_id: { type: ["string", "null"] },
+              driver_id: { type: ["string", "null"], description: "reassign_driver: the replacement, from find_replacement_driver." },
+              place_id: { type: ["string", "null"], description: "book_stay: from find_stay_near." },
+              job_id: { type: ["string", "null"], description: "offer_market_job: from find_market_jobs_near." },
               nights: { type: ["integer", "null"] },
               status: {
                 type: ["string", "null"],
@@ -117,7 +217,10 @@ const tools: ToolDef[] = [
               },
               severity: { type: ["string", "null"], enum: ["low", "medium", "high", "critical", null] },
             },
-            required: ["type", "title", "rationale", "message", "departure_id", "hotel_id", "nights", "status", "severity"],
+            required: [
+              "type", "title", "rationale", "message", "departure_id", "hotel_id", "driver_id", "place_id", "job_id",
+              "nights", "status", "severity",
+            ],
             additionalProperties: false,
           },
         },
@@ -135,6 +238,9 @@ type Move = {
   message: string | null;
   departure_id: string | null;
   hotel_id: string | null;
+  driver_id: string | null;
+  place_id: string | null;
+  job_id: string | null;
   nights: number | null;
   status: string | null;
   severity: string | null;
@@ -150,7 +256,16 @@ type Proposal = { summary: string; checks: string[]; moves: Move[] };
 type Seen = {
   departures: Map<string, { rebooking_fee_cents: number }>;
   hotels: Map<string, { nightly_rate_cents: number }>;
+  drivers: Map<string, { full_name: string; minutes: number; arrives_at: string; makes_closing: boolean | null }>;
+  stays: Map<string, { name: string; address: string; lat: number | null; lng: number | null }>;
+  jobs: Map<string, { order_ref: string; label: string; fee_cents: number }>;
+  /** The car's driver when the agent first looked: the one a stay or a job is for. */
+  strandedDriverId: string | null;
+  notified: boolean;
 };
+
+/** What this run is about, for the tools that act on "the car". */
+type Run = { incidentId: string; vehicleId: string };
 
 async function rpc(fn: string, args: Record<string, unknown>) {
   const { data, error } = await db.rpc(fn, args);
@@ -158,8 +273,110 @@ async function rpc(fn: string, args: Record<string, unknown>) {
   return data;
 }
 
-async function runTool(name: string, input: Record<string, string>, seen: Seen): Promise<unknown> {
+async function pickupContext(vehicleId: string, seen: Seen): Promise<PickupContext> {
+  const ctx = (await rpc("agent_pickup_context", { p_vehicle_id: vehicleId })) as PickupContext | null;
+  if (!ctx) throw new Error("no such vehicle");
+  if (ctx.driver) seen.strandedDriverId ??= ctx.driver.id;
+  return ctx;
+}
+
+// deno-lint-ignore no-explicit-any
+async function runTool(name: string, input: Record<string, any>, seen: Seen, run: Run): Promise<unknown> {
   switch (name) {
+    case "check_driver_eta": {
+      const ctx = await pickupContext(input.vehicle_id, seen);
+      const eta = await computeEta(ctx);
+      const tz = ctx.site?.timezone ?? "Europe/Berlin";
+      return {
+        ...eta,
+        eta_local: eta.eta ? hhmm(eta.eta, tz) : null,
+        closes_local: eta.closes_at ? hhmm(eta.closes_at, tz) : null,
+        timezone: tz,
+        driver_position: ctx.driver ? { lat: ctx.driver.lat, lng: ctx.driver.lng, at: ctx.driver.position_at } : null,
+        trip: ctx.trip,
+      };
+    }
+    case "check_key_pickup": {
+      const ctx = await pickupContext(input.vehicle_id, seen);
+      if (!ctx.site) return { error: "No pickup site recorded for this car." };
+      const s = ctx.site;
+      const closes = s.closes_at ? hhmm(s.closes_at, s.timezone) : null;
+      return {
+        site: s.name,
+        city: s.city,
+        opening_hours: s.opening_hours,
+        closes_today_local: closes,
+        closes_at: s.closes_at,
+        key_handover: s.key_handover,
+        after_hours_pickup_possible: s.key_handover === "key_box",
+        access_note: s.access_note,
+        verdict: s.key_handover === "staff_only"
+          ? `Keys are handed over in person by staff, so nothing can be collected after ${closes ?? "closing"}`
+          : s.key_handover === "key_box"
+          ? "A key box allows collection after closing"
+          : "The record does not say how keys are handed over; do not rely on a late collection",
+      };
+    }
+    case "notify_driver": {
+      if (seen.notified) return { error: "Already sent the driver a message for this incident." };
+      const body = String(input.message ?? "").trim().slice(0, 2000);
+      if (!body) return { error: "message is empty" };
+      const { error } = await db.from("messages").insert({ to_vehicle: run.vehicleId, incident_id: run.incidentId, body });
+      if (error) throw new Error(`sending: ${error.message}`);
+      seen.notified = true;
+      await audit("agent.notify", { incident_id: run.incidentId, vehicle_id: run.vehicleId, body });
+      return { sent: true };
+    }
+    case "find_replacement_driver": {
+      const ctx = await pickupContext(input.vehicle_id, seen);
+      if (!ctx.site) return { error: "No pickup site recorded for this car." };
+      const site = ctx.site;
+      const candidates = (await rpc("agent_available_drivers", { p_vehicle_id: input.vehicle_id })) as Array<{
+        driver_id: string;
+        full_name: string;
+        lat: number;
+        lng: number;
+      }>;
+      const drives = await driveTimes(candidates.map((c) => ({ lat: c.lat, lng: c.lng })), site);
+      const closes = site.closes_at ? new Date(site.closes_at) : null;
+      const rows = candidates.map((c, i) => {
+        const d = drives[i];
+        const arrives = new Date(Date.now() + d.minutes * 60_000);
+        return {
+          driver_id: c.driver_id,
+          full_name: c.full_name,
+          drive_minutes: d.minutes,
+          road_km: d.km,
+          source: d.source,
+          arrives_at: arrives.toISOString(),
+          arrives_local: hhmm(arrives, site.timezone),
+          makes_closing: site.key_handover === "key_box" ? true : closes ? arrives <= closes : null,
+          minutes_to_spare: closes ? Math.round((closes.getTime() - arrives.getTime()) / 60_000) : null,
+        };
+      }).sort((a, b) => a.drive_minutes - b.drive_minutes);
+      for (const r of rows) {
+        seen.drivers.set(r.driver_id, { full_name: r.full_name, minutes: r.drive_minutes, arrives_at: r.arrives_at, makes_closing: r.makes_closing });
+      }
+      return { site: site.name, closes_local: site.closes_at ? hhmm(site.closes_at, site.timezone) : null, candidates: rows };
+    }
+    case "find_stay_near": {
+      const found = await hotelsNear({ lat: Number(input.lat), lng: Number(input.lng) });
+      for (const h of found.hotels) seen.stays.set(h.place_id, { name: h.name, address: h.address, lat: h.lat, lng: h.lng });
+      return found;
+    }
+    case "find_market_jobs_near": {
+      const rows = (await rpc("agent_find_market_jobs", { p_lat: Number(input.lat), p_lng: Number(input.lng), p_after: input.after })) as Array<{
+        job_id: string;
+        order_ref: string;
+        label: string;
+        fee_cents: number;
+        timezone: string;
+        window_start: string;
+        window_end: string;
+      }>;
+      for (const r of rows) seen.jobs.set(r.job_id, { order_ref: r.order_ref, label: r.label, fee_cents: r.fee_cents });
+      return rows.map((r) => ({ ...r, window_local: `${hhmm(r.window_start, r.timezone)}–${hhmm(r.window_end, r.timezone)}` }));
+    }
     case "check_pickup_feasibility":
       return rpc("agent_check_pickup_feasibility", { p_vehicle_id: input.vehicle_id });
     case "find_next_ferry": {
@@ -211,6 +428,32 @@ function toRow(m: Move, seen: Seen): { row: Record<string, unknown> } | { error:
       return { row: { ...base, payload: { status: m.status } } };
     case "escalate_incident":
       return { row: { ...base, payload: { severity: m.severity ?? "high" } } };
+    case "reassign_driver": {
+      const d = m.driver_id ? seen.drivers.get(m.driver_id) : undefined;
+      if (!d) return { error: "reassign_driver needs a driver_id returned by find_replacement_driver" };
+      return {
+        row: {
+          ...base,
+          payload: {
+            driver_id: m.driver_id, from_driver_id: seen.strandedDriverId, full_name: d.full_name,
+            drive_minutes: d.minutes, arrives_at: d.arrives_at, makes_closing: d.makes_closing, driver_message: m.message,
+          },
+        },
+      };
+    }
+    case "book_stay": {
+      const h = m.place_id ? seen.stays.get(m.place_id) : undefined;
+      if (!h) return { error: "book_stay needs a place_id returned by find_stay_near" };
+      if (!seen.strandedDriverId) return { error: "book_stay: no driver known for this car" };
+      const nights = Math.min(Math.max(m.nights ?? 1, 1), 3);
+      return { row: { ...base, payload: { place_id: m.place_id, ...h, nights, driver_id: seen.strandedDriverId, driver_message: m.message } } };
+    }
+    case "offer_market_job": {
+      const j = m.job_id ? seen.jobs.get(m.job_id) : undefined;
+      if (!j) return { error: "offer_market_job needs a job_id returned by find_market_jobs_near" };
+      if (!seen.strandedDriverId) return { error: "offer_market_job: no driver known for this car" };
+      return { row: { ...base, payload: { job_id: m.job_id, ...j, driver_id: seen.strandedDriverId, driver_message: m.message } } };
+    }
     default:
       return { error: `unknown move ${m.type}` };
   }
@@ -235,7 +478,11 @@ async function triage(incidentId: string) {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY") ?? Deno.env.get("OPENROUTER_API_KEY.");
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set for edge functions");
 
-  const seen: Seen = { departures: new Map(), hotels: new Map() };
+  const seen: Seen = {
+    departures: new Map(), hotels: new Map(), drivers: new Map(), stays: new Map(), jobs: new Map(),
+    strandedDriverId: null, notified: false,
+  };
+  const run: Run = { incidentId, vehicleId: String((context as { vehicle?: { id?: string } }).vehicle?.id ?? "") };
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM },
     { role: "user", content: `New incident. Context as JSON:\n${JSON.stringify(context, null, 2)}` },
@@ -289,7 +536,7 @@ async function triage(incidentId: string) {
     for (const call of calls) {
       let content: string;
       try {
-        content = JSON.stringify(await runTool(call.function.name, JSON.parse(call.function.arguments), seen));
+        content = JSON.stringify(await runTool(call.function.name, JSON.parse(call.function.arguments), seen, run));
       } catch (e) {
         content = `Error: ${String(e)}`;
       }
