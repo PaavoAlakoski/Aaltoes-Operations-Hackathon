@@ -128,3 +128,33 @@ export const relatedRecords = pgTable("related_records", {
   primaryKey({ columns: [table.collection, table.id] }),
   index("related_records_order_idx").on(table.orderId, table.collection),
 ])
+
+// ── Control room work ──────────────────────────────────────────────────────
+// These tables hold what people decide in the control room. They sit beside the
+// snapshot with no foreign keys into it, so reseeding the dataset never stops on
+// them and never deletes a decision.
+
+/** One human decision on an agent proposal or a piece of open work. */
+export const crDecisions = pgTable("cr_decisions", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  /** The record the decision is about: a proposal, alert, work item, thread or inbox thread. */
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id").notNull(),
+  /** approve, change, reject, take_over, done or link. */
+  action: text("action").notNull(),
+  note: text("note"),
+  decidedBy: text("decided_by").notNull(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
+  /** Plain-language consequences, in the order they happen. */
+  effects: jsonb("effects").$type<{ text: string; needsPerson: boolean }[]>().notNull(),
+}, (table) => [index("cr_decisions_order_idx").on(table.orderId), index("cr_decisions_target_idx").on(table.targetId)])
+
+/** How much an agent may do on its own for one kind of action. */
+export const crAutonomy = pgTable("cr_autonomy", {
+  actionKind: text("action_kind").primaryKey(),
+  /** ask_first, act_then_tell or on_its_own. */
+  level: text("level").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+})

@@ -7,15 +7,13 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
-    "attachments:seed": "tsx scripts/seed-attachments.ts",
     "attachments:smoke": "tsx scripts/smoke-attachments.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1155.0",
-    "@aws-sdk/s3-request-presigner": "^3.1155.0",
+    "@electric-sql/pglite": "^0.5.11",
     "dotenv": "^18.0.8",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.2",

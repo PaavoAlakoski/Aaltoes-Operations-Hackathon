@@ -13,13 +13,13 @@ async function main(): Promise<void> {
     const data = await response.json() as ResponseBody
     const entry = data.attachments.find((item) => item.id === sample.id)
     if (!entry) throw new Error(`${sample.id} is missing from its order attachment API`)
-    const file = await fetch(entry.url)
-    if (!file.ok) throw new Error(`Signed attachment URL returned ${file.status} for ${sample.id}`)
+    const file = await fetch(new URL(entry.url, base))
+    if (!file.ok) throw new Error(`Attachment URL returned ${file.status} for ${sample.id}`)
     if (sha256(Buffer.from(await file.arrayBuffer())) !== sample.sha256) {
       throw new Error(`Downloaded bytes do not match ${sample.id}`)
     }
   }
-  console.log(`Verified ${samples.length} attachment formats through the API and local object store.`)
+  console.log(`Verified ${samples.length} attachment formats through the API.`)
 }
 
 main().catch((error: unknown) => { console.error(error); process.exitCode = 1 })
