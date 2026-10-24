@@ -188,7 +188,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       : null;
     items.push({
       id: c.id, orderId: oid, kind: 'conversation', source: { table: 'conversations', id: c.id },
-      title: `Open thread with the ${partyLabel(c.counterparty_type)} about ${categoryLabel(c.category)}${filedElsewhere ? ` (filed on ${world.bundles.get(c.order_id)?.order.reference ?? 'another order'})` : ''}`,
+      title: `${c.counterparty_type ? `Open thread with the ${partyLabel(c.counterparty_type)}` : 'Open case thread'} about ${categoryLabel(c.category)}${filedElsewhere ? ` (filed on ${world.bundles.get(c.order_id)?.order.reference ?? 'another order'})` : ''}`,
       detail: latest ? latest.body : null,
       status: c.status, risk: external ? 1 : 0, clock, owner: c.owner ?? null, waitingOn: c.waiting_on ?? null,
       group: external && clock && !isPast(clock.at, now) ? 'waiting' : 'follow',

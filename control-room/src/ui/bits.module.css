@@ -29,4 +29,3 @@
   font-size: var(--size-meta);
   color: var(--text-meta);
 }
-.source[data-source='agent'] { color: var(--teal); }

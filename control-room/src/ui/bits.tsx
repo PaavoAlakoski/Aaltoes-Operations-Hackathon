@@ -52,3 +52,26 @@ export const SOURCE_WORD = { record: 'from the record', agent: 'from the agent',
 export function SourceTag({ source }: { source: keyof typeof SOURCE_WORD }) {
   return <span className={s.source} data-source={source}>{SOURCE_WORD[source]}</span>;
 }
+
+/** "Due in 15 min", "Overdue 22 h", "Pickup slot passed 3 h ago", "Promise ends in 2 h". */
+export function clockPhrase(clock: { at: string; what: string } | null, now: string): string | null {
+  if (!clock) return null;
+  const rel = relative(clock.at, now);
+  const past = Date.parse(clock.at) < Date.parse(now);
+  const what = clock.what.charAt(0).toUpperCase() + clock.what.slice(1);
+  if (clock.what === 'due') return past ? `Overdue ${rel.replace(' ago', '')}` : `Due ${rel}`;
+  if (clock.what === 'pickup slot passed') return `Pickup slot passed ${rel}`;
+  if (past) return `${PAST_CLOCK[clock.what] ?? what} ${rel}`;
+  return `${what} ${rel}`;
+}
+
+const PAST_CLOCK: Record<string, string> = {
+  'promise ends': 'Promise ended',
+  pickup: 'Pickup was due',
+  'ferry check-in closes': 'Check-in closed',
+  'next check': 'Check was due',
+}
+
+export function isOverdue(clock: { at: string; what: string } | null, now: string): boolean {
+  return !!clock && Date.parse(clock.at) < Date.parse(now);
+}

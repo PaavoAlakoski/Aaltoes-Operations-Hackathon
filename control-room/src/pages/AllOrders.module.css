@@ -1,0 +1,104 @@
+.select {
+  padding: 8px var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  font-size: var(--size-meta);
+  font-weight: var(--weight-bold);
+  color: var(--text-meta);
+  border-bottom: 1px solid var(--line-strong);
+  padding: 0;
+}
+
+.sort {
+  width: 100%;
+  padding: var(--s2) var(--s2) var(--s2) 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sort:hover {
+  color: var(--text);
+}
+
+.table td {
+  padding: var(--s3) var(--s2) var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.table tbody tr:hover {
+  background: var(--hover);
+}
+
+.ref {
+  text-decoration: none;
+}
+.ref:hover span {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.car {
+  display: block;
+  font-weight: var(--weight-bold);
+}
+
+.route,
+.meta {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 719px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+  }
+  .table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px var(--s3);
+    padding: var(--s3) 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .table td {
+    padding: 0;
+    border: 0;
+  }
+  .table td[data-label='Customer'],
+  .table td[data-label='Open'] {
+    display: none;
+  }
+  .table td[data-label='Stage'],
+  .table td[data-label='Next deadline'] {
+    font-size: var(--size-meta);
+    color: var(--text-meta);
+  }
+}

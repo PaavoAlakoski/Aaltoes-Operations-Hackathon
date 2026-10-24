@@ -1,0 +1,36 @@
+.page {
+  margin: 0 auto;
+  max-width: var(--width-list);
+}
+.page[data-width='order'] {
+  max-width: var(--width-order);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin-bottom: var(--s5);
+}
+
+.title {
+  font-family: var(--font-title);
+  font-size: var(--size-title);
+  font-weight: var(--weight-bold);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  margin-top: var(--s1);
+  color: var(--text-meta);
+}
+
+.actions {
+  display: flex;
+  gap: var(--s3);
+  align-items: center;
+  flex-wrap: wrap;
+}

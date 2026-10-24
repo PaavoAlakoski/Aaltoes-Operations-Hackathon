@@ -1,0 +1,128 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s4);
+}
+
+.primary {
+  padding: 10px var(--s4);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--asphalt);
+  color: var(--birch);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: opacity var(--fast) var(--ease);
+}
+.primary:hover {
+  opacity: 0.88;
+}
+.primary:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 10px var(--s1);
+  border: 0;
+  background: none;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+}
+.text:hover {
+  text-decoration-color: currentColor;
+}
+.text:disabled {
+  opacity: 0.5;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.confirmTitle {
+  font-weight: var(--weight-bold);
+}
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: var(--s2);
+}
+
+.num {
+  font-size: var(--size-meta);
+  font-weight: var(--weight-bold);
+  color: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.step[data-by='person'] .num {
+  color: var(--orange);
+}
+
+.onYou {
+  color: var(--orange);
+  font-weight: var(--weight-bold);
+}
+
+.noteField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.noteLabel {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+}
+
+.note {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  resize: vertical;
+}
+.note:focus-visible {
+  outline-offset: 0;
+}
+
+.error {
+  color: var(--red);
+}
+
+.decided {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.decidedTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: var(--weight-bold);
+  color: var(--green);
+}
+
+.decidedNote {
+  color: var(--text-meta);
+}
