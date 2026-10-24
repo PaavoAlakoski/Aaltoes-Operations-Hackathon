@@ -42,7 +42,11 @@ demotion takes effect on the next call, not the next token refresh (tested).
 Nobody writes tables directly except inserting incidents and messages, and column grants plus a
 trigger stamp who sent them, from where and with what status, whatever the client sends. Every other
 write is an RPC: `report_position`, `acknowledge_incident`, `assign_incident`, `resolve_incident`,
-`decide_suggestion`, `set_vehicle_status`, `set_user_role`, `mark_message_read`, `simulate_ferry_jam`.
+`decide_suggestion`, `set_vehicle_status`, `set_user_role`, `mark_message_read`, `simulate_ferry_jam`,
+`clear_live_activity` (any staff member: deletes what was sent while testing, meaning every message except
+the two seeded ones, every incident a driver or control reported with its agent proposals, and the hotel
+rooms the agent booked; the system's own tracking-gap incidents stay. It is the "Delete all messages and
+requests" button on Needs you).
 `anon` can read nothing here (it still reads the v2 snapshot tables, which the live deployment uses).
 
 ### Realtime

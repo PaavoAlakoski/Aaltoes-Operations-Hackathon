@@ -5,7 +5,16 @@
 .orderLive { margin-bottom: var(--s6); padding: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--radius); }
 .nowHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--s2) var(--s4); margin-bottom: var(--s3); }
 .nowTitle { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--size-body); font-weight: var(--weight-bold); }
-.queueFoot { margin-top: var(--s3); }
+.queueFoot { margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.danger, .dangerSolid {
+  border-radius: var(--radius); padding: 6px 14px; min-height: 36px; cursor: pointer;
+  font-weight: var(--weight-bold); white-space: nowrap; border: 1px solid var(--red);
+}
+.danger { background: var(--bg); color: var(--red); }
+.danger:hover { background: var(--hover); }
+.dangerSolid { background: var(--red); color: var(--birch); }
+.dangerSolid:disabled { opacity: 0.6; cursor: default; }
+.confirm { flex-basis: 100%; display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--red); border-radius: var(--radius); }
 .tabs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s4); }
 .tab {
   display: inline-flex; align-items: center; gap: var(--s2); min-height: 32px; padding: 4px 12px; cursor: pointer;

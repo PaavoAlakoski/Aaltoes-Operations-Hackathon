@@ -779,6 +779,7 @@ export type Database = {
         Args: { p_assignee: string; p_incident_id: string }
         Returns: Database["public"]["Tables"]["incidents"]["Row"]
       }
+      clear_live_activity: { Args: never; Returns: Json }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       decide: {
         Args: {

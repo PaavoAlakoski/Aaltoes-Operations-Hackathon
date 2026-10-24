@@ -53,6 +53,8 @@ interface Ops {
   decide: (suggestionId: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
   send: (draft: MessageDraft) => Promise<void>;
   simulateFerryJam: () => Promise<Incident>;
+  /** Deletes what was sent while testing: people's messages and reports, the agent's replies and proposals. */
+  clearActivity: () => Promise<{ messages: number; incidents: number; suggestions: number }>;
   setVehicleStatus: (vehicleId: string, status: Vehicle['status'], reason: string) => Promise<void>;
 }
 
@@ -177,6 +179,9 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
           setMessages((l) => upsert(l, p.new as Message, byCreated));
         })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (p) => {
+          setMessages((l) => l.filter((r) => r.id !== (p.old as Message).id));
+        })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vehicles' }, (p) => {
           const v = p.new as Vehicle;
           setVehicles((m) => new Map(m).set(v.id, v));
@@ -265,12 +270,27 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         replaceIncident(row);
         return row;
       },
+      clearActivity: async () => {
+        const counts = check(await sb().rpc('clear_live_activity')) as { messages: number; incidents: number; suggestions: number };
+        // The seeded messages and the system's own incidents stay: read back what is left.
+        const since = new Date(Date.now() - 48 * 3600_000).toISOString();
+        const [is, ss, ms] = await Promise.all([
+          sb().from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
+          sb().from('agent_suggestions').select('*').gte('created_at', since).order('created_at', { ascending: false }).limit(400),
+          sb().from('messages').select('*').order('created_at', { ascending: false }).limit(200),
+        ]);
+        setIncidents(check(is));
+        setSuggestions(check(ss));
+        setMessages(check(ms));
+        refreshKpis();
+        return counts;
+      },
       setVehicleStatus: async (vehicleId, s, reason) => {
         const v = check(await sb().rpc('set_vehicle_status', { p_vehicle_id: vehicleId, p_status: s, p_reason: reason }));
         setVehicles((m) => new Map(m).set(v.id, v));
       },
     };
-  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, kpis, online, viewing]);
+  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, kpis, online, viewing, refreshKpis]);
 
   return <Ctx.Provider value={ops}>{children}</Ctx.Provider>;
 }

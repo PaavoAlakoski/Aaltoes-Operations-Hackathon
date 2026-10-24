@@ -154,11 +154,58 @@ function Room() {
             <button type="button" className={s.button} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
               Simulate ferry traffic jam
             </button>
+            <ClearActivity />
           </div>
           {simErr && <p className={s.error} role="alert">{simErr}</p>}
         </section>
       </div>
     </>
+  );
+}
+
+/** Deletes what was sent while testing, after a second click. */
+function ClearActivity() {
+  const { clearActivity } = useOps();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const n = await clearActivity();
+      setDone(`Deleted ${n.messages} messages, ${n.incidents} incidents and ${n.suggestions} agent proposals.`);
+      setAsking(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!asking) {
+    return (
+      <>
+        <button type="button" className={s.danger} onClick={() => { setAsking(true); setDone(null); }}>
+          Delete all messages and requests
+        </button>
+        {done && <p className={s.meta} role="status">{done}</p>}
+      </>
+    );
+  }
+  return (
+    <div className={s.confirm} role="alertdialog" aria-label="Delete all messages and requests">
+      <p>Delete every message and report sent while testing, with the agent's replies and proposals, for everyone? The starting messages and automatic tracking alerts stay. This can't be undone.</p>
+      <div className={s.inline}>
+        <button type="button" className={s.dangerSolid} onClick={() => void run()} disabled={busy}>
+          {busy ? 'Deleting…' : 'Delete everything'}
+        </button>
+        <button type="button" className={s.textButton} onClick={() => setAsking(false)} disabled={busy}>Cancel</button>
+      </div>
+      {err && <p className={s.error} role="alert">{err}</p>}
+    </div>
   );
 }
 

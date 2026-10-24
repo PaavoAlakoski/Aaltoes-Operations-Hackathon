@@ -139,7 +139,10 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
       .channel('driver-db')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) =>
         setMessages((l) => [p.new as Message, ...l.filter((x) => x.id !== (p.new as Message).id)]))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (p) =>
+        setMessages((l) => l.filter((x) => x.id !== (p.old as Message).id)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, (p) => {
+        if (p.eventType === 'DELETE') return setIncidents((l) => l.filter((x) => x.id !== (p.old as Incident).id));
         const row = p.new as Incident;
         if (row?.id) setIncidents((l) => [row, ...l.filter((x) => x.id !== row.id)]);
       })
