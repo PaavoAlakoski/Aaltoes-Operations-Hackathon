@@ -143,3 +143,12 @@ describe('a trade-in has its own slot', () => {
     expect(pickup.facts.find((f) => f.label === 'Trade-in pickup slot')!.value).toMatch(/21 Oct/);
   });
 });
+
+describe('a relay through a transfer yard', () => {
+  it('names the second slot as the yard release, not a trade-in', () => {
+    const b = ref('CD-420702');
+    const pickup = caseView(b, world, orderItems(b, world), []).facts.find((s) => s.title === 'Pickup')!;
+    expect(pickup.facts.map((f) => f.label)).toContain('Yard release slot');
+    expect(pickup.facts.map((f) => f.label)).not.toContain('Trade-in pickup slot');
+  });
+});

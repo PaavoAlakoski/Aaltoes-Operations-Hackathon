@@ -90,3 +90,93 @@ had rewritten line endings inside PDFs on this Windows clone. We added
 - We re-ran the starter's own smoke tests, which still pass, and changed one
   alert in a copy of the dataset to confirm the queue moves (CD-420702 went
   from "Decide now" to "Follow up").
+
+## Saturday 24 October, afternoon: v2, a clean rebuild
+
+v1 worked, but it grew out of the starter and looked like it. We wrote a
+rebuild brief (`REBUILD-PROMPT.md`) and had Claude Code start again in a new
+folder, `control-room/`. It was told not to copy anything from `starter/`.
+The stack is Vite, React 19, strict TypeScript and plain CSS, on a hosted
+Supabase project.
+
+### Reading and asking first
+- The brief told it to read the packet docs and write a plan before any code.
+  It came back with three questions instead of guessing:
+  - which branch to use (a new `control-room-v2`, so v1 stays intact)
+  - whether to rename the env vars to the brief's names (yes)
+  - whether it may write to the hosted project (yes)
+- Before designing anything it profiled every collection: every field, and
+  every status value with its count. The attention rules came from those
+  counts, not from the brief's wording alone.
+
+### What we checked, and what changed because of it
+- **Stage without `display_lane`.** The derived stage matches `display_lane`
+  on all 100 orders without ever reading it. A test sets every
+  `display_lane` to "delivered" and checks the queue does not change.
+- **Pickup checks were too noisy.** The first rule raised "pickup contact or
+  access not checked" for every booked order, including pickups six days
+  out. The dataset README says a check is due when the slot is near. We
+  dropped that first rule and now raise it only within 72 hours of the slot.
+- **The wrong clock.** CD-420603 (ferry connection at risk) sat in Follow up
+  because its delivery promise was two days away. The ferry check-in closes
+  in three hours. A booked crossing still ahead is now the deciding clock.
+  The Decide now window went from 2 h to 4 h after we looked at which orders
+  actually landed there.
+- **Lead decision vs situation.** CD-420322 (the brief's breakdown example)
+  first led with the bare alert and a playbook line. The real decision is the
+  recovery follow-up, which has a recorded next step: get the owner's
+  service decision. Rows now say what happened (the situation), and the order
+  page leads with the item that carries the decision. CD-420593's row reads
+  "Driver found no car at pickup", not "Operations copilot needs your yes".
+
+### Bugs found by checking, not by reading the code
+- **A refused decision hung instead of failing.** `decide()` raised the
+  conflict with Postgres error 40001, "serialization failure". The client
+  retried it as a transient error, so the call hung. A retry also slipped
+  through after we cleared the first decision, which left a stray live
+  decision. Conflicts now use PostgREST's `PT409`, a plain HTTP 409.
+  `npm run check:db` undoes leftovers before it runs, so it is safe to repeat.
+- **A decision leaked into the next item.** The Playwright smoke test caught
+  this one. After approving on CD-420593, the alert slid into the lead spot
+  still showing "If you approve… Save: Approve". The decision controls are
+  now keyed by item. The item you just decided stays in place with "Decided
+  by you" and Undo until you leave the order.
+- **A false positive in the customer rule.** The rule catches agent steps
+  that mention a customer, buyer, dealer or owner. It flagged the approved
+  message to the CD-420322 driver, because the quoted text mentions "the
+  owner's service instruction". The check now ignores quoted text: the
+  quote is what the agent says to the driver, and the words outside it say
+  who it is sent to.
+
+### The walkthrough at 1440 px and 390 px
+`npm run screens` photographs the named orders at both widths and fails on
+horizontal overflow. Looking at the pictures found:
+- **CD-420455:** the trade-in's pickup slot was shown as the main car's. Slots
+  and promises are now matched to the order's endpoint points everywhere.
+- **CD-420702:** our first fix for that was itself wrong. It labelled the
+  relay's transfer-yard slot "Trade-in pickup slot". The label now comes from
+  the route point: "Yard release slot".
+- **CD-420299:** a pickup two days away showed a red "Missing". It now shows
+  "Planned" until the slot has passed.
+- **CD-420455:** the condition claim's photos were buried in the facts
+  column. The lead now shows them, with a caption that a photo shows what was
+  submitted, not when the mark was made.
+- **Agents page:** "waiting" counted approved-but-not-done proposals as well.
+- **Inbox:** each candidate had its own black primary button, two per message.
+- **Phones:**
+  - On the order page, the facts came after the whole timeline. Grid areas
+    now put them between the decision and the history.
+  - The nav wrapped onto a second line.
+
+### What we left alone, on purpose
+- **CD-420075 is quiet, but its ferry check-in closes in 3 h** and the last
+  position says 13% of the way. A person sees that in the header clock, but no
+  rule flags it. We kept the attention rules to the brief rather than invent
+  a risk model. This is the check the future agent should do first:
+  - read the road estimate to the terminal
+  - ask the driver
+  - only then bring a person a decision
+- **No sign-in.** `decided_by` is a fixed "Shift operator".
+- **One leftover from testing.** The migration applied to the hosted project
+  that moved conflicts to HTTP 409 also marked one leftover test decision
+  undone. The migration file in the repo does not include that cleanup.

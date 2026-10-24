@@ -65,3 +65,18 @@ test('approve the empty-pickup proposal, see it decided, then undo it', async ({
   await page.goto('/orders/CD-420593');
   await expect(page.getByRole('article').getByRole('button', { name: 'Approve' })).toBeVisible();
 });
+
+test('the queue works from the keyboard', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Decide now' })).toBeVisible();
+  await page.keyboard.press('/');
+  await expect(page.getByRole('searchbox')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('j');
+  await expect(page.locator('a[data-row]').first()).toBeFocused();
+  await page.keyboard.press('j');
+  await page.keyboard.press('k');
+  await expect(page.locator('a[data-row]').first()).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/orders\/CD-420322$/);
+});

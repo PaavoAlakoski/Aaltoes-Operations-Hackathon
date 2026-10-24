@@ -109,7 +109,7 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   const slot = pickupSlot(b);
   for (const other of otherPickupSlots(b)) {
     pickup.push({
-      label: 'Trade-in pickup slot', value: `${formatTime(other.start_at, other.timezone)}–${formatTime(other.end_at, other.timezone).split(', ')[1]}`,
+      label: otherSlotLabel(b, other.point_id), value: `${formatTime(other.start_at, other.timezone)}–${formatTime(other.end_at, other.timezone).split(', ')[1]}`,
       certainty: 'planned', by: `selected by ${sourceLabel(other.source)}`, at: null,
     });
   }
@@ -196,6 +196,16 @@ function facts(b: OrderBundle, world: World): FactSection[] {
   }
   sections.push({ title: 'Delivery', facts: delivery });
   return sections;
+}
+
+/** Name a second pickup slot by what its route point is: a transfer yard or a trade-in. */
+function otherSlotLabel(b: OrderBundle, pointId: string): string {
+  const point = b.points.find((p) => p.id === pointId);
+  if (point?.role === 'TRANSFER') return 'Yard release slot';
+  const segment = b.segments.find((s) => s.from_point_id === pointId);
+  const item = b.items.find((i) => i.id === segment?.order_item_id);
+  if (item?.role === 'TRADE_IN') return 'Trade-in pickup slot';
+  return 'Other pickup slot';
 }
 
 function addressFact(label: string, a: ReturnType<World['addresses']['get']>, b: OrderBundle): Fact {
