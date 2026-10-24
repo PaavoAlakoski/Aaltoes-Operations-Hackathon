@@ -1,0 +1,6 @@
+/* Tailwind theme and utilities only: no preflight, so the starter's base styles are untouched. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+/* globals.css sets `button { font: inherit; color: inherit }` outside any layer, which beats
+   layered utilities. Buttons in the panel mark their font and colour utilities important (`text-white!`). */
