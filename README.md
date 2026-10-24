@@ -3,6 +3,8 @@
 Our entry for Bahn's challenge at the Prompt Operations Hackathon, 24 to 25
 October 2026. The challenge brief is in `PARTICIPANT-BRIEF.md`.
 
+Live: https://aaltoes-operations-hackathon-starte-tau.vercel.app/
+
 The control room is where people and agents work together to get every car
 delivered. It shows a person only the orders that need them, says why, and
 brings each one down to a single decision with the evidence behind it. The
