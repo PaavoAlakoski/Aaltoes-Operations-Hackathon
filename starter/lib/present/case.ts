@@ -190,7 +190,7 @@ function buildFacts(view: RecordView): FactGroup[] {
 
   const driverFacts: FactRow[] = []
   for (const assignment of view.assignments.filter((entry) => entry.status !== "CANCELLED")) {
-    driverFacts.push({ label: "Driver", value: assignment.driver.name, certainty: "confirmed", source: `booking ${assignment.statusLabel.toLowerCase()}${assignment.acceptedAt ? `, accepted ${fmtDateTime(assignment.acceptedAt)}` : ""}`, at: assignment.acceptedAt, tone: assignment.tone })
+    driverFacts.push({ label: "Driver", value: assignment.driver.name, certainty: "confirmed", source: `booking ${assignment.statusLabel.toLowerCase()}, accepted`, at: assignment.acceptedAt, tone: assignment.tone })
     if (assignment.positioning) driverFacts.push({ label: "Getting there", value: assignment.positioning, certainty: "planned", source: "estimate; a home base or prior job is not a location", at: null, tone: "neutral" })
   }
   const leg = first?.legs.find((entry) => entry.tracking)
