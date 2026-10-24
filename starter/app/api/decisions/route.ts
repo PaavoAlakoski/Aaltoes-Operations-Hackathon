@@ -29,5 +29,15 @@ export async function POST(request: Request) {
     orderId: body.orderId, targetType: item.kind, targetId: item.recordId, action, note,
     effects: effectsFor(item, action, note, loaded.bundle),
   })
+  // A message belongs to one order. Linking it here rules out the other candidates.
+  if (action === "link" && item.kind === "inbox") {
+    const thread = loaded.bundle.inboxThreads.find((row) => row.id === item.recordId)
+    const others = (Array.isArray(thread?.details.candidate_order_ids) ? thread.details.candidate_order_ids : [])
+      .filter((id): id is string => typeof id === "string" && id !== body.orderId)
+    for (const orderId of others) await recordDecision({
+      orderId, targetType: "inbox", targetId: item.recordId, action: "not_this_order", note: null,
+      effects: [{ text: `Ruled out: the message was linked to ${loaded.order.reference}.`, needsPerson: false }],
+    })
+  }
   return NextResponse.json({ decision }, { status: 201 })
 }

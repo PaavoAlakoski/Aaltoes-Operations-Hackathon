@@ -1,32 +1,37 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { fmtDateTime, fmtDay } from "@/lib/present/time"
 import type { InboxThreadView, InboxView } from "@/lib/present/types"
 import { AppFrame } from "../components/app-frame"
 import { Icon } from "../components/icons"
-import { ActorName, Chip, OrderLinks, When } from "../components/ui"
+import { ActorName, Chip, OrderLink, OrderLinks, When } from "../components/ui"
 
 export default function InboxPage() {
   const [view, setView] = useState<InboxView | null>(null)
   const [error, setError] = useState("")
   const [selected, setSelected] = useState<string | null>(null)
   const [showList, setShowList] = useState(true)
+  const [matches, setMatches] = useState<Match[]>([])
+
+  const load = useCallback((signal?: AbortSignal) => {
+    fetch("/api/inbox", { signal, cache: "no-store" })
+      .then((response) => { if (!response.ok) throw new Error("Could not load the inbox"); return response.json() as Promise<{ view: InboxView; matches: Match[] }> })
+      .then((data) => {
+        setView(data.view)
+        setMatches(data.matches)
+        setError("")
+        const wanted = window.location.hash.replace(/^#/, "")
+        setSelected((current) => current ?? (data.view.threads.find((thread) => thread.id === wanted) ?? data.view.threads[0])?.id ?? null)
+      })
+      .catch((cause: unknown) => { if (!signal?.aborted) setError(cause instanceof Error ? cause.message : "Could not load the inbox") })
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch("/api/inbox", { signal: controller.signal })
-      .then((response) => { if (!response.ok) throw new Error("Could not load the inbox"); return response.json() as Promise<{ view: InboxView }> })
-      .then((data) => {
-        setView(data.view)
-        setError("")
-        const wanted = window.location.hash.replace(/^#/, "")
-        const first = data.view.threads.find((thread) => thread.id === wanted) ?? data.view.threads[0]
-        if (first) setSelected(first.id)
-      })
-      .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Could not load the inbox") })
+    load(controller.signal)
     return () => controller.abort()
-  }, [])
+  }, [load])
 
   const thread = useMemo(() => view?.threads.find((item) => item.id === selected) ?? null, [view, selected])
 
@@ -60,12 +65,58 @@ export default function InboxPage() {
     <section className="mail-read" aria-label="Conversation">
       {!view && !error && <p className="empty">Loading…</p>}
       {view && !thread && <p className="empty">Choose a thread.</p>}
-      {thread && <Thread thread={thread} onBack={() => setShowList(true)} />}
+      {thread && <Thread thread={thread} matches={matches.filter((match) => match.threadId === thread.id)} onChange={() => load()} onBack={() => setShowList(true)} />}
     </section>
   </main></AppFrame>
 }
 
-function Thread({ thread, onBack }: { thread: InboxThreadView; onBack: () => void }) {
+type Match = { id: string; threadId: string; orderId: string; action: string; at: string }
+
+/** Which order is this message about? A candidate is a guess until a person links it. */
+function MatchPanel({ thread, matches, onChange }: { thread: InboxThreadView; matches: Match[]; onChange: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const linked = matches.find((match) => match.action === "link")
+  async function decide(orderId: string, action: "link" | "not_this_order") {
+    setBusy(true)
+    setError("")
+    const response = await fetch("/api/decisions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId, targetId: thread.id, action }) })
+    if (!response.ok) setError(((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? "Could not save")
+    setBusy(false)
+    onChange()
+  }
+  async function undo() {
+    setBusy(true)
+    for (const match of matches) await fetch(`/api/decisions/${match.id}`, { method: "DELETE" })
+    setBusy(false)
+    onChange()
+  }
+  if (linked) {
+    const order = thread.candidates.find((candidate) => candidate.id === linked.orderId)
+    return <div className="done-card" style={{ marginTop: 18 }}>
+      <div className="done-top"><Icon name="check" />Linked by you to <OrderLink order={order ?? { id: linked.orderId, reference: linked.orderId }} />
+        <button type="button" className="btn small quiet" onClick={undo} disabled={busy}>Undo</button></div>
+      <ol className="effects"><li>The message is filed on that order and leaves the unmatched inbox.</li><li>The other candidates are ruled out. Nothing about them was shared with the sender.</li></ol>
+    </div>
+  }
+  return <div className="confirm" style={{ marginTop: 18 }}>
+    <div className="confirm-head">Which order is this about?</div>
+    <p className="note-text" style={{ marginTop: 4 }}>The candidates are guesses from the message. Linking one files the message there and rules out the others.</p>
+    <div className="rules">{thread.candidates.map((candidate) => {
+      const ruledOut = matches.some((match) => match.orderId === candidate.id && match.action === "not_this_order")
+      return <div className="rule" key={candidate.id} style={{ padding: "10px 0" }}>
+        <div className="rule-name"><OrderLink order={candidate} />{ruledOut && <span className="row-sub-inline"> · ruled out by you</span>}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="btn small primary" disabled={busy} onClick={() => decide(candidate.id, "link")}>It’s this order</button>
+          {!ruledOut && <button type="button" className="btn small" disabled={busy} onClick={() => decide(candidate.id, "not_this_order")}>Not this one</button>}
+        </div>
+      </div>
+    })}</div>
+    {error && <p className="confirm-error" role="alert">{error}</p>}
+  </div>
+}
+
+function Thread({ thread, matches, onChange, onBack }: { thread: InboxThreadView; matches: Match[]; onChange: () => void; onBack: () => void }) {
   return <article>
     <button type="button" className="mail-back" onClick={onBack}><Icon name="chevron" size={13} style={{ transform: "rotate(180deg)" }} /> All threads</button>
     <header className="mail-head">
@@ -84,7 +135,8 @@ function Thread({ thread, onBack }: { thread: InboxThreadView; onBack: () => voi
         {thread.candidates.length > 0 && !thread.linked.length && <div><dt>Candidates</dt><dd><OrderLinks orders={thread.candidates} /> <span className="muted">hypotheses, not links</span></dd></div>}
         {thread.resolution && <div><dt>Resolution</dt><dd>{thread.resolution.decisionLabel}{thread.resolution.at ? `, ${fmtDateTime(thread.resolution.at)}` : ""}</dd></div>}
       </dl>
-      {thread.candidateBasis && <p className="mail-basis"><b>Basis.</b> {thread.candidateBasis}</p>}
+      {thread.candidateBasis && <p className="mail-basis"><b>Why these candidates.</b> {thread.candidateBasis}</p>}
+      {thread.candidates.length > 0 && !thread.linked.length && thread.status === "OPEN" && <MatchPanel thread={thread} matches={matches} onChange={onChange} />}
     </header>
     <div className="messages mail-messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" ? " from-operator" : ""}`} key={message.id}>
       <div className="msg-meta"><b><ActorName actor={message.author} /></b><span className="role">{message.author.role}</span><span>to {message.recipient.name}</span><span>· {message.channelLabel}</span>{message.internal && <span className="msg-tag internal">Internal</span>}<time dateTime={message.at}>{fmtDateTime(message.at)}</time></div>

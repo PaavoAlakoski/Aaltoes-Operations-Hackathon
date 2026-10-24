@@ -1,17 +1,20 @@
 import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
+import { listDecisions } from "@/lib/control-room"
 import { db } from "@/lib/db"
 import { buildInboxView } from "@/lib/present/inbox"
 import { loadShared, orderRefs } from "@/lib/present/load"
 import { relatedRecords } from "@/lib/schema"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const [threadRows, messageRows, shared] = await Promise.all([
+  const [threadRows, messageRows, shared, decisions] = await Promise.all([
     db.select().from(relatedRecords).where(eq(relatedRecords.collection, "support_inbox_threads")),
     db.select().from(relatedRecords).where(eq(relatedRecords.collection, "support_inbox_messages")),
     loadShared(),
+    listDecisions(),
   ])
   const threads = threadRows.map((row) => row.details)
     .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))
@@ -22,5 +25,8 @@ export async function GET() {
   const refs = await orderRefs(ids)
   // The raw threads and messages keep their shape; `view` reads them out with names and references.
   const view = buildInboxView(threads, messages, shared.makeDirectory(), refs, shared.snapshotAt)
-  return NextResponse.json({ threads, messages, view })
+  // Decisions people made on candidate matches, by thread.
+  const matches = decisions.filter((decision) => decision.targetType === "inbox")
+    .map((decision) => ({ threadId: decision.targetId, orderId: decision.orderId, action: decision.action, at: decision.decidedAt, id: decision.id }))
+  return NextResponse.json({ threads, messages, view, matches })
 }

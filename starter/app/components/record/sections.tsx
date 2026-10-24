@@ -1,42 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
-import type { AttentionItem, JourneyGroup, JourneyLeg, JourneyStep, ProposalView, RecordView, ThreadView } from "@/lib/present/types"
-import { fmtClock, fmtDateTime, fmtDay, relativeTo } from "@/lib/present/time"
+import type { JourneyGroup, JourneyLeg, JourneyStep, RecordView } from "@/lib/present/types"
+import { fmtClock, fmtDateTime, relativeTo } from "@/lib/present/time"
 import { Icon } from "../icons"
-import { ActorName, Chip, Empty, OrderLink, OrderLinks, Range, SectionHead, When } from "../ui"
+import { ActorName, Chip, Empty, OrderLink, Range, SectionHead, When } from "../ui"
 import { OrderFiles } from "./files"
-
-const ATTENTION_ICON: Record<AttentionItem["kind"], string> = {
-  alert: "alert", owned_alert: "alert", work: "work", incident: "incident", waiting: "waiting", conversation: "message",
-  proposal: "proposal", claim: "alert", custody: "key", check: "note", inbox: "inbox",
-}
-
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-/* ── Needs a person ─────────────────────────────────────────────────────── */
-
-export function AttentionPanel({ view }: { view: RecordView }) {
-  const items = view.attention
-  if (items.length === 0) return <div className="panel quiet" id="attention">
-    <Icon name="note" />
-    <span>Nothing in the records is waiting on a person. <small>Checked: alerts, incidents, work items, conversations, agent proposals, claims, custody and a moving car's position. Not checked: proofs, documents and endpoint details beyond a booked car's pickup contact and access.</small></span>
-  </div>
-  return <div className="panel" id="attention">
-    <div className="panel-head">Needs a person <span className="num">{items.length}</span></div>
-    <ol className="panel-rows">{items.map((item) => <li className="panel-row" key={`${item.kind}-${item.recordId}`}>
-      <Icon name={ATTENTION_ICON[item.kind]} className={`tone-${item.tone}`} />
-      <div>
-        <div className={`panel-row-title tone-${item.tone}`}>{item.title}</div>
-        {item.detail && <div className="panel-row-detail">{item.detail}</div>}
-      </div>
-      <div className="panel-row-side">{item.owner ?? "No owner"}{item.at && item.atLabel ? <><br />{capitalise(item.atLabel)} <When at={item.at} snapshotAt={view.snapshotAt} relative withZone={false} /></> : null}</div>
-    </li>)}</ol>
-  </div>
-}
 
 /* ── Route strip ────────────────────────────────────────────────────────── */
 
@@ -97,62 +66,6 @@ function RouteLeg({ leg, view }: { leg: JourneyLeg; view: RecordView }) {
   </div>
 }
 
-/* ── Conversations ──────────────────────────────────────────────────────── */
-
-export function ConversationsSection({ view }: { view: RecordView }) {
-  const { threads, notes } = view
-  return <section className="sec" id="conversations">
-    <SectionHead title="Conversations" count={threads.length} />
-    {threads.length === 0 && notes.length === 0 && <Empty>No conversation is linked to this order.</Empty>}
-    <div className="rows">
-      {threads.map((thread) => <ThreadRow key={thread.id} thread={thread} view={view} />)}
-      {notes.map((note) => <div className="row" key={note.id}>
-        <div className="row-main">
-          <div className="row-title">Note from <ActorName actor={note.author} /></div>
-          <div className="row-preview">{note.body}</div>
-        </div>
-        <div className="row-side"><When at={note.at} withZone={false} /></div>
-      </div>)}
-    </div>
-  </section>
-}
-
-function ThreadRow({ thread, view }: { thread: ThreadView; view: RecordView }) {
-  const [open, setOpen] = useState(false)
-  const last = thread.messages[thread.messages.length - 1]
-  const count = thread.messages.length
-  return <article className="row">
-    <div className="row-main">
-      <div className="row-title">{thread.categoryLabel} <Chip tone={thread.tone}>{thread.statusLabel}</Chip></div>
-      <div className="row-sub">
-        {thread.channelLabel}{thread.counterparty ? <> with <ActorName actor={thread.counterparty} /></> : ""} · {count} {count === 1 ? "message" : "messages"}
-        {thread.waitingOn && ` · waiting on ${thread.waitingOn}`}{thread.owner && ` · ${thread.owner}`}
-        {thread.relatedOrders.length > 0 && <> · also <OrderLinks orders={thread.relatedOrders} /></>}
-      </div>
-      {last && !open && <div className="row-preview"><b>{last.author.name}:</b> {last.body}</div>}
-      {open && <ThreadMessages thread={thread} />}
-      {count > 0 && <button type="button" className="show-more" onClick={() => setOpen((value) => !value)}>{open ? "Hide messages" : `Read ${count === 1 ? "the message" : `all ${count} messages`}`}</button>}
-    </div>
-    <div className="row-side"><When at={thread.updatedAt} withZone={false} /></div>
-  </article>
-}
-
-export function ThreadMessages({ thread }: { thread: ThreadView }) {
-  return <div className="messages">{thread.messages.map((message) => <div className={`msg${message.internal ? " internal" : message.author.kind === "operator" || message.author.kind === "agent" ? " from-operator" : ""}`} key={message.id}>
-    <div className="msg-meta">
-      <b><ActorName actor={message.author} /></b>
-      <span className="role">{message.author.role}</span>
-      <span>to {message.recipient.name}</span>
-      <span>· {message.channelLabel}</span>
-      {message.internal && <span className="msg-tag internal">Internal</span>}
-      {message.author.kind === "agent" && <span className="msg-tag">Agent</span>}
-      {message.otherOrder && <span className="msg-tag">Filed on <OrderLink order={message.otherOrder} /></span>}
-      <time dateTime={message.at}>{fmtDateTime(message.at)}</time>
-    </div>
-    <p className="msg-body">{message.body}</p>
-  </div>)}</div>
-}
-
 /* ── Evidence ───────────────────────────────────────────────────────────── */
 
 export function EvidenceSection({ view }: { view: RecordView }) {
@@ -168,31 +81,6 @@ export function EvidenceSection({ view }: { view: RecordView }) {
     </div>}
     <OrderFiles orderId={view.header.id} />
   </section>
-}
-
-/* ── Prior agent work ───────────────────────────────────────────────────── */
-
-export function DecisionsSection({ view }: { view: RecordView }) {
-  const { proposals } = view
-  return <section className="sec" id="decisions">
-    <SectionHead title="Prior agent work" count={proposals.length} />
-    {proposals.length === 0 && <Empty>No agent has proposed anything on this order yet. Your agent's proposals and the human decision on them belong here.</Empty>}
-    <div className="rows">{proposals.map((proposal) => <ProposalRow key={proposal.id} proposal={proposal} />)}</div>
-  </section>
-}
-
-function ProposalRow({ proposal }: { proposal: ProposalView }) {
-  return <article className="row">
-    <div className="row-main">
-      <div className="row-title">{proposal.summary} <Chip tone={proposal.tone} dot>{proposal.statusLabel}</Chip></div>
-      <div className="row-sub">
-        {proposal.agent.name} · {proposal.commandLabel.toLowerCase()}
-        {proposal.review && <> · {proposal.review.decisionLabel.toLowerCase()} by {proposal.review.reviewer.name}</>}
-        {proposal.execution && <> · execution {proposal.execution.statusLabel.toLowerCase()}{proposal.execution.effects ? `, ${proposal.execution.effects} event${proposal.execution.effects === 1 ? "" : "s"} committed` : ", nothing committed"}</>}
-      </div>
-    </div>
-    <div className="row-side"><When at={proposal.createdAt} withZone={false} /></div>
-  </article>
 }
 
 export function ProposalCards({ view }: { view: RecordView }) {
@@ -220,23 +108,6 @@ export function ProposalCards({ view }: { view: RecordView }) {
       </div>)}</div>
     </>}
   </div>
-}
-
-/* ── Activity ───────────────────────────────────────────────────────────── */
-
-export function ActivitySection({ view }: { view: RecordView }) {
-  const [all, setAll] = useState(false)
-  const events = view.history.flatMap((day) => day.events)
-  const shown = all ? events : events.slice(0, 6)
-  return <section className="sec" id="history">
-    <SectionHead title="Activity" count={view.historyTotal} />
-    {events.length === 0 && <Empty>No events recorded.</Empty>}
-    <div className="events">{shown.map((event) => <div className="event" key={event.id}>
-      <time dateTime={event.at} title={fmtDateTime(event.at)}>{fmtDay(event.at)} {fmtClock(event.at)}</time>
-      <div className="event-text"><b>{event.text}</b>{event.actor && <span className="actor"> · {event.actor}</span>}{event.shared && <span className="actor"> · shared bundle</span>}{all && event.detail && <small>{event.detail}</small>}</div>
-    </div>)}</div>
-    {events.length > 6 && <button type="button" className="show-more" onClick={() => setAll((value) => !value)}>{all ? "Show the latest only" : `Show all ${events.length} events`}</button>}
-  </section>
 }
 
 /* ── Detailed route, for the records panel ──────────────────────────────── */
