@@ -152,9 +152,58 @@ function Room() {
               ))}
             </ul>
           )}
+          <div className={s.queueFoot}>
+            <ResetDemo />
+          </div>
         </section>
       </div>
     </>
+  );
+}
+
+/** Puts the demo back to its starting point, after a second click. */
+function ResetDemo() {
+  const { resetDemo } = useOps();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const n = await resetDemo();
+      setDone(`Demo reset: removed ${n.messages} messages, ${n.chat} chat messages, ${n.incidents} incidents and ${n.suggestions} agent proposals.`);
+      setAsking(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!asking) {
+    return (
+      <>
+        <button type="button" className={s.danger} onClick={() => { setAsking(true); setDone(null); }}>
+          Reset demo
+        </button>
+        {done && <p className={s.meta} role="status">{done}</p>}
+      </>
+    );
+  }
+  return (
+    <div className={s.confirm} role="alertdialog" aria-label="Reset demo">
+      <p>Put the demo back to its starting point for everyone? Every message, chat and report sent while testing goes, with the agent's replies, proposals and bookings. Cars, drivers, travel plans and routes return to the original data. This can't be undone.</p>
+      <div className={s.inline}>
+        <button type="button" className={s.dangerSolid} onClick={() => void run()} disabled={busy}>
+          {busy ? 'Resetting…' : 'Reset everything'}
+        </button>
+        <button type="button" className={s.textButton} onClick={() => setAsking(false)} disabled={busy}>Cancel</button>
+      </div>
+      {err && <p className={s.error} role="alert">{err}</p>}
+    </div>
   );
 }
 
