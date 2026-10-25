@@ -95,9 +95,10 @@ update public.profiles set role = 'driver', vehicle_id = 'veh-01024', driver_ref
 update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-301', availability = 'available', lat = 48.4029, lng = 11.7488, position_at = now() where id = '10000000-0000-4000-8000-000000000016';
 update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-302', availability = 'available', lat = 48.3705, lng = 10.8978, position_at = now() where id = '10000000-0000-4000-8000-000000000017';
 update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-303', availability = 'available', lat = 48.7665, lng = 11.4258, position_at = now() where id = '10000000-0000-4000-8000-000000000018';
--- Standby drivers in the north (Lübeck, Hamburg): substitutes for the ferry corridors' drivers.
-update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-304', availability = 'available', lat = 53.8655, lng = 10.6866, position_at = now() where id = '10000000-0000-4000-8000-000000000019';
-update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-305', availability = 'available', lat = 53.5511, lng = 9.9937, position_at = now() where id = '10000000-0000-4000-8000-000000000020';
+-- Standby drivers in the north (waiting in Lübeck and Hamburg, both living in Hamburg in the dataset):
+-- substitutes for the ferry corridors' drivers.
+update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-348', availability = 'available', lat = 53.8655, lng = 10.6866, position_at = now() where id = '10000000-0000-4000-8000-000000000019';
+update public.profiles set role = 'driver', vehicle_id = null, driver_ref = 'drv-356', availability = 'available', lat = 53.5511, lng = 9.9937, position_at = now() where id = '10000000-0000-4000-8000-000000000020';
 update public.profiles set availability = 'on_job' where role = 'driver' and vehicle_id is not null;
 update public.vehicles set pickup_site_id = 'site-muc-isartal' where id = 'veh-01024';
 update public.profiles set role = 'dispatcher', vehicle_id = null, driver_ref = null where id = '20000000-0000-4000-8000-000000000001';

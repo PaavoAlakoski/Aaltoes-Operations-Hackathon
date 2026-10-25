@@ -48,7 +48,8 @@ Work like this:
   4. If the keys can be collected late (key box), propose only a message_vehicle saying what to do.
 - If the car's driver cannot get to the car or its keys at all, for any reason (ill, injured, in hospital, a personal
   emergency, stranded with no way to arrive in time), this is a driver substitution, whether the car still waits at
-  the dealer or is already on the road:
+  the dealer or is already on the road. This comes before the ferry and train-delay recoveries: do not rebook a
+  ferry or book a hotel for a driver who cannot go on.
   1. If anyone is hurt, set_car_status stopped (unless the car is still waiting for pickup).
   2. Call find_replacement_driver and propose reassign_driver for the fastest suitable driver (for a pickup, one who
      makes it before closing). driver_free_after is false when the driver cannot work (ill, injured, in hospital),
@@ -71,6 +72,8 @@ Writing:
   closes 20:30: misses by 28 min"). Times in the local time of the place they refer to, 24-hour clock.
 - Each move gets a short imperative title ("Rebook to Sat 08:30 sailing").
 - Messages to drivers are plain, short and friendly, in English; say what is decided and what to do next.
+- A message field (notify_driver's message, a move's message) holds only the words the driver reads: no lead-in for
+  control such as "Here's the message to the driver:", no quotation marks around it.
 - Costs come from the tools; leave cost_cents null for moves that cost nothing.
 - Never propose contacting a customer or dealer.`;
 
@@ -299,6 +302,20 @@ type Seen = {
 /** What this run is about, for the tools that act on "the car". */
 type Run = { incidentId: string; vehicleId: string };
 
+/**
+ * Only the words for the driver. The model sometimes leads with a note to
+ * control ("Here's the message to the driver:") and quotes the text; the
+ * driver gets what follows, unquoted.
+ */
+function forDriver(text: string): string {
+  let t = text.trim();
+  const lead = t.match(/^[\s\S]{0,200}?\bmessage (?:to|for) (?:the )?(?:drivers?|corridor)\b[^:\n]{0,40}:\s*/i);
+  if (lead && lead[0].length < t.length) t = t.slice(lead[0].length).trim();
+  const quoted = t.match(/^["“](.*)["”]$/s);
+  if (quoted && quoted[1].trim()) t = quoted[1].trim();
+  return t;
+}
+
 async function rpc(fn: string, args: Record<string, unknown>) {
   const { data, error } = await db.rpc(fn, args);
   if (error) throw new Error(`${fn}: ${error.message}`);
@@ -320,7 +337,7 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
       return keyPickupReport(await pickupContext(input.vehicle_id, seen));
     case "notify_driver": {
       if (seen.notified) return { error: "Already sent the driver a message for this incident." };
-      const body = String(input.message ?? "").trim().slice(0, 2000);
+      const body = forDriver(String(input.message ?? "")).slice(0, 2000);
       if (!body) return { error: "message is empty" };
       const { error } = await db.from("messages").insert({ to_vehicle: run.vehicleId, incident_id: run.incidentId, body });
       if (error) throw new Error(`sending: ${error.message}`);
@@ -420,7 +437,8 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
 }
 
 /** Turns one proposed move into a row, or explains why it cannot be stored. */
-function toRow(m: Move, seen: Seen): { row: Record<string, unknown> } | { error: string } {
+function toRow(move: Move, seen: Seen): { row: Record<string, unknown> } | { error: string } {
+  const m = { ...move, message: move.message == null ? null : forDriver(move.message) || null };
   const base = { suggestion_type: m.type, title: m.title.slice(0, 120), rationale: m.rationale };
   switch (m.type) {
     case "rebook_ferry": {

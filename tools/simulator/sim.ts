@@ -93,17 +93,23 @@ async function signIn(email: string): Promise<Car | null> {
   };
 }
 
-/** Reads the car and its itinerary again; a rebuilt schedule already counts the delay so far. */
-async function refresh(car: Car, withItinerary: boolean) {
+/**
+ * Reads the car and its itinerary again; a rebuilt schedule already counts the delay so far.
+ * False when control has given the car to another driver: this driver stops sending.
+ */
+async function refresh(car: Car, withItinerary: boolean): Promise<boolean> {
+  const me = await car.db.from('profiles').select('vehicle_id').single();
+  if (me.data && me.data.vehicle_id !== car.vehicle.id) return false;
   const v = await car.db.from('vehicles').select('*').eq('id', car.vehicle.id).single();
   if (v.data) car.vehicle = v.data;
-  if (!withItinerary) return;
+  if (!withItinerary) return true;
   const it = await itineraryOf(car.db);
   if (it && it.built_at !== car.itinerary?.built_at) {
     car.lag = 0;
     car.baseDelay = car.vehicle.delay_seconds;
   }
   if (it) car.itinerary = it;
+  return true;
 }
 
 async function tick(car: Car, now: number) {
@@ -129,7 +135,7 @@ async function maybeIncident(cars: Car[]) {
 }
 
 console.log(`Signing in ${DRIVERS.length} drivers${SKIP.size ? ` (skipping ${[...SKIP].join(', ')})` : ''}…`);
-const cars = (await Promise.all(DRIVERS.map(signIn))).filter((c): c is Car => c !== null);
+let cars = (await Promise.all(DRIVERS.map(signIn))).filter((c): c is Car => c !== null);
 for (const car of cars) {
   const fix = car.itinerary && scheduledPosition(car.itinerary.legs, Date.now());
   const where = !car.itinerary ? 'no itinerary, stays put'
@@ -146,7 +152,13 @@ const timer = setInterval(async () => {
   ticks++;
   const now = Date.now();
   if (ticks % (VEHICLE_EVERY_MS / TICK_MS) === 0) {
-    await Promise.all(cars.map((c) => refresh(c, ticks % (ITINERARY_EVERY_MS / TICK_MS) === 0)));
+    const kept = await Promise.all(cars.map((c) => refresh(c, ticks % (ITINERARY_EVERY_MS / TICK_MS) === 0)));
+    const gone = cars.filter((_, i) => !kept[i]);
+    for (const c of gone) {
+      await c.publisher.close();
+      console.log(`${new Date().toLocaleTimeString()}  ${c.vehicle.label} (${c.vehicle.order_ref}) went to another driver; ${c.email} stops sending`);
+    }
+    if (gone.length) cars = cars.filter((c) => !gone.includes(c));
   }
   const results = (await Promise.all(cars.map((car) => tick(car, now)))).filter((r) => r !== null);
   const failed = results.filter((r) => r.error);

@@ -95,6 +95,8 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
   const stranded = driverMoves.map((m) => (m.payload as Record<string, unknown>).driver_id as string | undefined).find(Boolean);
   const strandedName = nameOf?.(stranded ?? null)?.split(' ')[0];
   const number = (m: Suggestion) => proposal.moves.indexOf(m) + 1;
+  // A substitute for a car already on the road takes over the drive, not a pickup.
+  const takeover = carMoves.some((m) => (m.payload as Record<string, unknown>).to === 'car');
 
   return (
     <section className={s.proposal} aria-label="Agent proposal" data-done={done || undefined}>
@@ -119,10 +121,10 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
 
       {recovery && (
         // Three equal columns: the car's lane takes the first, the stranded driver's lane spans the other two.
-        <div className={s.lanes}>
+        <div className={s.lanes} data-single={driverMoves.length === 0 || undefined}>
           {carMoves.length > 0 && (
             <section className={s.lane} data-lane="car" aria-label="The car">
-              <h4 className={s.laneTitle}>The car: keep the pickup today</h4>
+              <h4 className={s.laneTitle}>{takeover ? 'The car: a new driver takes over' : 'The car: keep the pickup today'}</h4>
               <ol className={s.laneMoves}>
                 {carMoves.map((m) => (
                   <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} />

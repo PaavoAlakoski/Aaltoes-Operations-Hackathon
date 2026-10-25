@@ -453,7 +453,18 @@ async function build(me: { id: string; driver_ref: string | null }, vehicle: Row
   // The transit link helps with the trains when the ticket site is not enough.
   legs[0].instructions.push(`Route: ${transit(home, airport)}`);
   // The booked departure, used or not, so a new booking triggers a rebuild.
-  return { legs, shift: Math.round(shift / 1000), departureId: booked?.id ?? null };
+  const departureId = booked?.id ?? null;
+
+  // The trips above are the plan's own driver's, from Tampere. A driver who
+  // took the car over on the road never made them: they get their own trip home.
+  const ownHome = await homeOf(me.driver_ref);
+  if (ownHome && ownHome.city !== "Tampere") {
+    const back = timeTrip(hops({ ...hel, city: "Helsinki", tz: HEL }, ownHome), "home", "home", { departAt: homeDepart });
+    if (current > 6) promote(back);
+    else for (const l of back) Object.assign(l, { status: "next", progress: 0 });
+    return { legs: [...legs.slice(2, -1), ...back], shift: Math.round(shift / 1000), departureId };
+  }
+  return { legs, shift: Math.round(shift / 1000), departureId };
 }
 
 /** Thrown when an order has no full drive-and-ferry plan, so the plain one is built instead. */

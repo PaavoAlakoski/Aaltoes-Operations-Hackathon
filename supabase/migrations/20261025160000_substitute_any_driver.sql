@@ -13,7 +13,8 @@
 -- - marks the old driver off work when the move says so (from_driver_availability
 --   'off': ill or hurt), else available for other work as before;
 -- - sends the new driver to the dealer for a pickup, or to the car's last
---   position when it is already on the road.
+--   position when it is already on the road;
+-- - sets a car on the road that was stopped for its driver moving again.
 --
 -- reset_demo also restores the two standby drivers in the north (seed.sql).
 
@@ -162,6 +163,12 @@ begin
       -- The itinerary was the old driver's; the new driver's app builds its own.
       delete from public.itineraries where vehicle_id = v.id;
       update public.vehicles set pickup_eta = null, pickup_in_time = null, pickup_eta_basis = null where id = v.id;
+      -- A car on the road stopped because its driver could not go on drives on
+      -- with the new driver; nothing else would set it moving again. A car
+      -- that needs a check stays as it is.
+      if not v_pickup then
+        update public.vehicles set status = 'moving' where id = v.id and status in ('stopped', 'offline');
+      end if;
       if v_pickup then
         v_body := coalesce(nullif(s.payload ->> 'driver_message', ''),
           format('Control has given you a pickup: %s (%s) at %s, %s.%s', v.label, coalesce(v.order_ref, v.id),
