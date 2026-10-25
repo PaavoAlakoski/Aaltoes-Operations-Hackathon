@@ -349,7 +349,7 @@ export function OrderLive({ reference }: { reference: string }) {
       ) : (
         <div className={s.detailGrid}>
           <p className={s.meta}>No incident on this car. Anything the driver, the system or the agent raises shows here as it happens.</p>
-          <Thread vehicle={vehicle} incident={null} driverName={driver?.full_name} />
+          <Thread vehicle={vehicle} incident={null} />
         </div>
       )}
     </section>
@@ -401,7 +401,6 @@ function AgentOutcome({ incident: i }: { incident: Incident }) {
 
 function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle: Vehicle }) {
   const ops = useOps();
-  const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
   const proposals = ops.proposals.filter((p) => p.incidentId === i.id);
   // A double recovery's two lanes need the full width; the conversation goes below.
   const wide = proposals.some((p) => p.moves.some((m) => ['reassign_driver', 'book_stay', 'offer_market_job'].includes(m.suggestion_type)));
@@ -438,30 +437,67 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
             ))
           )}
         </div>
-        <Thread vehicle={vehicle} incident={i} driverName={driver?.full_name} />
+        <Thread vehicle={vehicle} incident={i} />
       </div>
     </article>
   );
 }
 
-function Thread({ vehicle, incident, driverName }: { vehicle: Vehicle; incident: Incident | null; driverName?: string }) {
+/**
+ * Who has driven this car, in order, and from when: a replacement driver
+ * (an executed reassign_driver) starts a new driver's turn on the car.
+ */
+function turnsOn(ops: ReturnType<typeof useOps>, vehicle: Vehicle, current: string | null) {
+  const carIncidents = new Set(ops.incidents.filter((i) => i.vehicle_id === vehicle.id).map((i) => i.id));
+  const handovers = ops.proposals.flatMap((p) => p.moves)
+    .filter((m) => m.suggestion_type === 'reassign_driver' && m.status === 'executed' && m.executed_at && carIncidents.has(m.incident_id))
+    .map((m) => {
+      const p = m.payload as { driver_id?: string; from_driver_id?: string };
+      return { from: p.from_driver_id ?? null, to: p.driver_id ?? null, at: Date.parse(m.executed_at!) };
+    })
+    .sort((a, b) => a.at - b.at);
+  const turns: { id: string; since: number }[] = [];
+  const first = handovers[0]?.from ?? (handovers.length ? null : current);
+  if (first) turns.push({ id: first, since: -Infinity });
+  for (const h of handovers) if (h.to) turns.push({ id: h.to, since: h.at });
+  return turns;
+}
+
+function Thread({ vehicle, incident }: { vehicle: Vehicle; incident: Incident | null }) {
   const ops = useOps();
   const [body, setBody] = useState('');
   const [toCorridor, setToCorridor] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
-  const thread = ops.messages
-    .filter((m) => (incident && m.incident_id === incident.id) || m.to_vehicle === vehicle.id || (driver && (m.from_user === driver.id || m.to_user === driver.id)))
-    .slice(0, 20)
-    .reverse();
+  const current = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver')?.id ?? null;
+  const turns = turnsOn(ops, vehicle, current);
+  const [picked, setPicked] = useState<string | null>(null);
+  const shown = picked && turns.some((t) => t.id === picked) ? picked : current ?? turns.at(-1)?.id ?? null;
   const who = (id: string | null) => (id ? ops.staff.find((p) => p.id === id)?.full_name ?? 'Someone' : 'Agent');
+
+  // Each driver sees their own conversation: what was written to or by them,
+  // and what was sent to the car (or its corridor, about this car) while they had it.
+  type Msg = (typeof ops.messages)[number];
+  const toCar = (m: Msg) => m.to_vehicle === vehicle.id || Boolean(m.to_corridor && incident && m.incident_id === incident.id);
+  const ownerOf = (m: Msg) => {
+    const direct = turns.find((t) => t.id === m.to_user || t.id === m.from_user);
+    if (direct) return direct.id;
+    if (!toCar(m)) return null;
+    const at = Date.parse(m.created_at);
+    return turns.filter((t) => t.since <= at).at(-1)?.id ?? null;
+  };
+  // A car nobody drives yet just shows what was sent to it.
+  const thread = ops.messages.filter((m) => (shown ? ownerOf(m) === shown : toCar(m))).slice(0, 20).reverse();
+  const onCar = shown === current;
 
   async function send(e: FormEvent) {
     e.preventDefault();
     setErr(null);
     const incident_id = incident?.id ?? null;
     try {
-      await ops.send(toCorridor
+      // A driver who has handed the car on is written to directly.
+      await ops.send(!onCar && shown
+        ? { to_user: shown, incident_id, body }
+        : toCorridor
         ? { to_corridor: vehicle.corridor_id, incident_id, body }
         : { to_vehicle: vehicle.id, incident_id, body });
       setBody('');
@@ -472,7 +508,18 @@ function Thread({ vehicle, incident, driverName }: { vehicle: Vehicle; incident:
 
   return (
     <section className={s.thread} aria-label="Messages">
-      <h3 className={s.h3}>Messages{driverName ? ` with ${driverName}` : ''}</h3>
+      <h3 className={s.h3}>Messages{shown ? ` with ${who(shown)}` : ''}</h3>
+      {turns.length > 1 && (
+        <ul className={s.tabs} aria-label="Drivers on this car">
+          {turns.map((t) => (
+            <li key={t.id}>
+              <button type="button" className={s.tab} aria-pressed={t.id === shown} onClick={() => setPicked(t.id)}>
+                {who(t.id)} · {t.id === current ? 'on the car' : 'handed over'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {thread.length === 0 ? (
         <p className={s.meta}>No messages yet.</p>
       ) : (
@@ -489,11 +536,13 @@ function Thread({ vehicle, incident, driverName }: { vehicle: Vehicle; incident:
       )}
       <form className={s.compose} onSubmit={send}>
         <label className="visually-hidden" htmlFor="msg">Message</label>
-        <textarea id="msg" className={s.input} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write to the driver…" required />
+        <textarea id="msg" className={s.input} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Write to ${shown ? who(shown) : 'the driver'}…`} required />
         <div className={s.inline}>
-          <label className={s.toggle}>
-            <input type="checkbox" checked={toCorridor} onChange={(e) => setToCorridor(e.target.checked)} /> Send to everyone on this corridor
-          </label>
+          {onCar && (
+            <label className={s.toggle}>
+              <input type="checkbox" checked={toCorridor} onChange={(e) => setToCorridor(e.target.checked)} /> Send to everyone on this corridor
+            </label>
+          )}
           <button type="submit" className={s.primary} disabled={!body.trim()}>Send</button>
         </div>
         {err && <p className={s.error} role="alert">{err}</p>}

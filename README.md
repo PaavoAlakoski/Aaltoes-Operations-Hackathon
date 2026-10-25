@@ -292,6 +292,20 @@ Drivers sign in to the driver app at `/driver`. Each is on one car:
 | Selma Talverick | `selma.talverick@demo.bahn.test` | Audi Q8 e-tron (`CD-420071`) | Hamburg – Frankfurt – Munich |
 | Elias Halverick | `elias.halverick@demo.bahn.test` | Porsche Macan (`CD-421024`), waiting for pickup | Hamburg – Frankfurt – Munich |
 
+Three drivers have no car. They are the replacement drivers near Munich that
+the agent can propose when a driver cannot make a pickup (the train-delay
+scenario); sign in as one to see the takeover from their side, and the job
+offers and messages that reach them:
+
+| Driver | Email | Waiting near |
+| --- | --- | --- |
+| Jonas Ekvall | `jonas.ekvall@demo.bahn.test` | Freising |
+| Mila Sorvenik | `mila.sorvenik@demo.bahn.test` | Augsburg |
+| Ida Brennholt | `ida.brennholt@demo.bahn.test` | Ingolstadt |
+
+A message to a car reaches the driver who had the car when it was sent, so
+after a takeover each driver keeps their own conversation.
+
 Cars drive on their own: every 20 seconds the database (pg_cron,
 `drive_on_schedule`) puts each driving car where its itinerary says it is now,
 and the control room makes sure every car on a job has an itinerary while it
