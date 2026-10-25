@@ -11,6 +11,7 @@ import { InTimeBanner, InTimePill } from './InTime';
 import { DealerChat } from './DealerChat';
 import { LiveMap } from './LiveMap';
 import { opsConfigured, useOps } from './ops';
+import { byEmergency, calculateEmergencyScore } from './emergency';
 import s from './live.module.css';
 
 const KIND_WORD: Record<string, string> = {
@@ -127,14 +128,18 @@ function Room() {
   const ops = useOps();
   const { incidents, vehicles, proposals } = ops;
 
-  const open = incidents.filter((i) => i.status !== 'resolved');
-  // Only open incidents: a resolved one needs nobody, and its order page keeps the history.
-  const shown = open;
   const pendingByIncident = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of proposals) m.set(p.incidentId, (m.get(p.incidentId) ?? 0) + p.moves.filter((x) => x.status === 'pending').length);
     return m;
   }, [proposals]);
+  // Only open incidents: a resolved one needs nobody, and its order page keeps the history.
+  // Most urgent first; the top one is highlighted.
+  const shown = useMemo(
+    () => byEmergency(incidents.filter((i) => i.status !== 'resolved'),
+      (i) => calculateEmergencyScore(i, { vehicle: vehicles.get(i.vehicle_id), pending: pendingByIncident.get(i.id) ?? 0 })),
+    [incidents, vehicles, pendingByIncident],
+  );
 
   return (
     <>
@@ -147,8 +152,8 @@ function Room() {
             <Empty title="Nothing open.">New incidents from drivers, the system and the agent appear here as they happen.</Empty>
           ) : (
             <ul className={s.list}>
-              {shown.map((i) => (
-                <IncidentRow key={i.id} incident={i} vehicle={vehicles.get(i.vehicle_id)} pending={pendingByIncident.get(i.id) ?? 0} />
+              {shown.map((i, index) => (
+                <IncidentRow key={i.id} incident={i} vehicle={vehicles.get(i.vehicle_id)} pending={pendingByIncident.get(i.id) ?? 0} top={index === 0} />
               ))}
             </ul>
           )}
@@ -228,7 +233,7 @@ function Kpis() {
   return <p className={s.kpis}>{parts.join(' · ')}</p>;
 }
 
-function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; vehicle: Vehicle | undefined; pending: number }) {
+function IncidentRow({ incident: i, vehicle, pending, top }: { incident: Incident; vehicle: Vehicle | undefined; pending: number; top: boolean }) {
   const { online, profile } = useOps();
   const watchers = online.filter((p) => p.viewing_incident === i.id && p.user_id !== profile?.id);
   const to = orderPath(vehicle, i.id);
@@ -248,7 +253,7 @@ function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; ve
       </span>
     </>
   );
-  return <li>{to ? <Link to={to} className={s.row} data-severity={i.severity}>{body}</Link> : <div className={s.row}>{body}</div>}</li>;
+  return <li className={top ? s.topIncident : undefined}>{to ?<Link to={to} className={s.row} data-severity={i.severity}>{body}</Link> : <div className={s.row}>{body}</div>}</li>;
 }
 
 // --------------------------------------------------------------- Order page
