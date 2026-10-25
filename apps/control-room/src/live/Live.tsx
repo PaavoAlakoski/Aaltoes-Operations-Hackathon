@@ -303,6 +303,13 @@ export function OrderLive({ reference }: { reference: string }) {
   const asked = params.get('incident');
   const selected = incidents.find((i) => i.id === asked) ?? incidents.find((i) => i.status !== 'resolved') ?? null;
 
+  // The car's route for the map. Asked again when its status changes, since
+  // that can put it on another leg; any failure leaves the corridor line.
+  const { loadItinerary } = ops;
+  useEffect(() => {
+    if (vehicle && ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver') loadItinerary(vehicle.id).catch(() => {});
+  }, [vehicle?.id, vehicle?.status, ops.status, ops.profile?.role, loadItinerary]);
+
   // Tell the rest of the room which incident this person is looking at.
   const { setViewing } = ops;
   useEffect(() => {
@@ -348,6 +355,7 @@ export function OrderLive({ reference }: { reference: string }) {
           onSelect={() => {}}
           focus={focus}
           site={site ? { lat: site.lat, lng: site.lng, name: site.name } : null}
+          route={ops.itineraries.get(vehicle.id)?.legs ?? null}
         />
       ) : (
         <p className={s.meta}>No position yet.</p>

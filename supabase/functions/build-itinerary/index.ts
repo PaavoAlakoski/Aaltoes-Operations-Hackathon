@@ -1,5 +1,6 @@
 // build-itinerary: a driver's whole job as legs for the driver app's Overview.
-// Called by a signed-in driver with their own session.
+// Called by a signed-in driver with their own session, or by staff with
+// { vehicle_id } for the control room's order map (built for that car's driver).
 //
 // Times come from the dataset (public.records: assignment steps, the ferry
 // reservation, delivery window, tracking and events), moved by one shift so
@@ -8,10 +9,10 @@
 // ferry-miss scenario shows up here. The driver's own travel (train and flight
 // out, train home) is planned around those times with slack for delays.
 //
-// Road legs come from Google once (only for the demo cars) and are kept in
+// Road legs come from Google once (for every car) and are kept in
 // route_cache. The result is stored in itineraries and rebuilt when the ferry
-// booking changes, the car's state puts it on another leg, or it is more than
-// two hours old.
+// booking changes, the car's state puts it on another leg, a road leg is still
+// a straight-line estimate, or it is more than two hours old.
 //
 // Leo's order has the full plan (build). Every other driver's order gets a
 // plain one (buildPlain): pickup, the drive (with the ferry when the car is
@@ -667,19 +668,31 @@ Deno.serve(async (req) => {
   });
   const { data: who } = await asDriver.auth.getUser();
   if (!who.user) return json({ error: "Sign in first." }, 401);
-  const { data: me } = await db.from("profiles").select("id,role,vehicle_id,driver_ref").eq("id", who.user.id).single();
-  if (!me || me.role !== "driver") return json({ error: "The itinerary is for drivers." }, 403);
+  const body = await req.json().catch(() => ({}));
+  const { data: caller } = await db.from("profiles").select("id,role,vehicle_id,driver_ref").eq("id", who.user.id).single();
+  if (!caller) return json({ error: "No profile." }, 403);
+  // Staff ask for a car (the control room's order map); it is built for that car's driver.
+  let me = caller;
+  if (caller.role !== "driver") {
+    if (typeof body.vehicle_id !== "string") return json({ error: "Say which car: vehicle_id." }, 400);
+    const { data: driver } = await db.from("profiles").select("id,role,vehicle_id,driver_ref")
+      .eq("role", "driver").eq("vehicle_id", body.vehicle_id).limit(1).maybeSingle();
+    if (!driver) return json({ itinerary: null });
+    me = driver;
+  }
   if (!me.vehicle_id) return json({ itinerary: null });
 
   const { data: vehicle } = await db.from("vehicles").select("*").eq("id", me.vehicle_id).single();
   if (!vehicle?.order_id) return json({ itinerary: null });
 
-  const body = await req.json().catch(() => ({}));
   const { data: saved } = await db.from("itineraries").select("*").eq("vehicle_id", vehicle.id).maybeSingle();
   const { data: booking } = await db.from("ferry_bookings").select("departure_id,status").eq("vehicle_id", vehicle.id)
     .in("status", ["booked", "rebooked", "boarded"]).maybeSingle();
-  const savedNow = (saved?.legs as Leg[] | undefined)?.find((l) => l.status === "now")?.kind ?? null;
-  const fresh = saved && !body.rebuild && saved.driver_id === me.id &&
+  const savedLegs = (saved?.legs as Leg[] | undefined) ?? [];
+  const savedNow = savedLegs.find((l) => l.status === "now")?.kind ?? null;
+  // A straight line is a fallback; try Google again for it.
+  const estimated = savedLegs.some((l) => l.source === "estimate");
+  const fresh = saved && !body.rebuild && !estimated && saved.driver_id === me.id &&
     saved.ferry_departure_id === (booking?.departure_id ?? null) &&
     savedNow === legNow(vehicle.status, booking?.status === "boarded") &&
     Date.now() - Date.parse(saved.built_at) < REBUILD_AFTER_MS;

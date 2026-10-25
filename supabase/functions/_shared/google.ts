@@ -3,8 +3,9 @@
 // secret. Without it, or when Google refuses a call, drive times fall back to
 // the same estimate the SQL side uses (straight line x 1.25 at 75 km/h) and
 // hotels come back empty. Every result says which source it came from, so
-// the agent can say so. Google is paid per request, so only the demo cars
-// use it; every other car gets the estimate.
+// the agent can say so. Google is paid per request, so drive times and hotels
+// are only for the demo cars; every other car gets the estimate. Route lines
+// (routePath) are for every car: each is asked once and kept in route_cache.
 
 export type LatLng = { lat: number; lng: number };
 export type Drive = { minutes: number; km: number; source: "google" | "estimate"; note?: string };
@@ -22,8 +23,8 @@ export type Hotel = {
 const key = () => Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 
 /**
- * The cars that ask Google: Elias Halverick's (simulate_train_delay) and Leo
- * Quellford's (the ferry-miss demo and its itinerary).
+ * The cars that ask Google for drive times and hotels: Elias Halverick's
+ * (simulate_train_delay) and Leo Quellford's (the ferry-miss demo).
  */
 export const GOOGLE_VEHICLE_IDS = new Set(["veh-01024", "veh-00584"]);
 const NOT_DEMO = "Google is only used for the demo cars";
@@ -177,15 +178,14 @@ function thin(path: [number, number][], minKm: number): [number, number][] {
 }
 
 /**
- * The road from a to b as a line to draw and drive along. Without traffic, so
- * it is the cheaper Routes request; callers cache it (route_cache).
+ * The road from a to b as a line to draw and drive along, for any car. Without
+ * traffic, so it is the cheaper Routes request; callers cache it (route_cache).
  */
 export async function routePath(vehicleId: string, a: LatLng, b: LatLng): Promise<RoutePath> {
   const straight = (note: string): RoutePath => {
     const e = estimate(a, b, note);
     return { path: [[a.lng, a.lat], [b.lng, b.lat]], km: e.km, minutes: e.minutes, source: "estimate", note };
   };
-  if (!isDemo(vehicleId)) return straight(NOT_DEMO);
   if (!key()) return straight("GOOGLE_MAPS_API_KEY is not set");
   try {
     const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {

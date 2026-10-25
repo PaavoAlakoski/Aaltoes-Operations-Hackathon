@@ -1,7 +1,8 @@
 // The live operations room's data: who is signed in, the cars, incidents,
 // agent proposals and messages, kept current by Supabase Realtime.
 //   Postgres Changes  incidents, messages, agent_suggestions, vehicles, profiles,
-//                     pickup sites, driver trips, the driver market and stays (RLS applies)
+//                     pickup sites, driver trips, the driver market, stays and
+//                     itineraries (RLS applies)
 //   Broadcast         corridor:<id>, live car positions sent by driver apps
 //   Presence          control-room, who is on shift and which incident each has open
 // Writes go through the RPCs only; the database decides what each role may do.
@@ -10,7 +11,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   CONTROL_ROOM_TOPIC, POSITION_EVENT, corridorTopic, createOpsClient, groupProposals, keepPresence,
   type ControlRoomPresence, type Corridor, type DriverStay, type DriverTrip, type Incident, type Kpis, type MarketJob,
-  type Message, type OpsClient, type PickupSite, type PositionPayload, type Profile, type Proposal, type Suggestion,
+  type Itinerary, type Message, type OpsClient, type PickupSite, type PositionPayload, type Profile, type Proposal, type Suggestion,
   type Vehicle,
 } from '@bahn/shared';
 
@@ -46,6 +47,10 @@ interface Ops {
   trips: DriverTrip[];
   jobs: MarketJob[];
   stays: DriverStay[];
+  /** By car; only the ones asked for with loadItinerary, then kept current. */
+  itineraries: Map<string, Itinerary>;
+  /** Builds or fetches a car's itinerary (its road legs come from Google Routes for the demo cars). */
+  loadItinerary: (vehicleId: string) => Promise<void>;
   kpis: Kpis | null;
   online: ControlRoomPresence[];
   /** The incident this person has open; shared through Presence. */
@@ -102,6 +107,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
   const [trips, setTrips] = useState<DriverTrip[]>([]);
   const [jobs, setJobs] = useState<MarketJob[]>([]);
   const [stays, setStays] = useState<DriverStay[]>([]);
+  const [itineraries, setItineraries] = useState(new Map<string, Itinerary>());
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [online, setOnline] = useState<ControlRoomPresence[]>([]);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -234,6 +240,20 @@ export function OpsProvider({ children }: { children: ReactNode }) {
           if (p.eventType === 'DELETE') setStays((l) => l.filter((r) => r.id !== (p.old as DriverStay).id));
           else setStays((l) => upsert(l, p.new as DriverStay, byCreated));
         })
+        // Only cars already asked for: the rest are not on screen.
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'itineraries' }, (p) => {
+          setItineraries((m) => {
+            if (p.eventType === 'DELETE') {
+              const id = (p.old as Itinerary).vehicle_id;
+              if (!m.has(id)) return m;
+              const next = new Map(m);
+              next.delete(id);
+              return next;
+            }
+            const row = p.new as unknown as Itinerary;
+            return m.has(row.vehicle_id) ? new Map(m).set(row.vehicle_id, row) : m;
+          });
+        })
         .subscribe((s) => setLive(s === 'SUBSCRIBED' ? 'live' : s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'offline' : 'connecting'));
       channels.push(changes);
 
@@ -287,13 +307,22 @@ export function OpsProvider({ children }: { children: ReactNode }) {
 
   const proposals = useMemo(() => groupProposals(suggestions), [suggestions]);
 
+  // Stable, so an order page asks once per car and status, not on every position.
+  const loadItinerary = useCallback(async (vehicleId: string) => {
+    const { data, error } = await client().functions.invoke<{ itinerary: Itinerary | null }>('build-itinerary', { body: { vehicle_id: vehicleId } });
+    if (error) throw new Error(error.message);
+    const it = data?.itinerary;
+    if (it) setItineraries((m) => new Map(m).set(vehicleId, it));
+  }, []);
+
   const ops = useMemo<Ops>(() => {
     const sb = () => client();
     const replaceIncident = (row: Incident) => setIncidents((l) => upsert(l, row, byCreated));
     return {
       status: !authReady ? 'loading' : status,
-      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online,
+      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, kpis, online,
       viewing, setViewing,
+      loadItinerary,
       signIn: async (email, password) => {
         const { error } = await sb().auth.signInWithPassword({ email, password });
         if (error) throw new Error(error.message);
@@ -329,7 +358,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         setVehicles((m) => new Map(m).set(v.id, v));
       },
     };
-  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, kpis, online, viewing, refreshKpis, loadAll]);
+  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, kpis, online, viewing, refreshKpis, loadAll, loadItinerary]);
 
   return <Ctx.Provider value={ops}>{children}</Ctx.Provider>;
 }

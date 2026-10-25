@@ -1,9 +1,12 @@
 // Corridors as lines, cars as dots. Positions arrive over Broadcast every few
-// seconds, so markers are moved in place rather than redrawn.
+// seconds, so markers are moved in place rather than redrawn. On an order page
+// the car's own route replaces its corridor: the itinerary's drive legs, which
+// follow the road Google Routes returned (a straight estimate for cars that do
+// not use Google), and the ferry crossing dashed.
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { delayPhrase, type Corridor, type Vehicle } from '@bahn/shared';
+import { delayPhrase, type Corridor, type Leg, type Vehicle } from '@bahn/shared';
 import s from './live.module.css';
 
 type Tone = 'green' | 'orange' | 'red' | 'grey';
@@ -22,7 +25,7 @@ function colour(tone: Tone): string {
   return css.getPropertyValue(v).trim() || '#726958';
 }
 
-export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelect, focus, site, className }: {
+export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelect, focus, site, route, className }: {
   corridors: Corridor[];
   vehicles: Vehicle[];
   /** Cars with an incident that is not resolved. */
@@ -33,6 +36,8 @@ export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelec
   focus?: { lat: number; lng: number; zoom?: number } | null;
   /** The pickup dealer, as a ring. */
   site?: { lat: number; lng: number; name: string } | null;
+  /** The car's itinerary legs; drawn instead of the corridors when given. */
+  route?: Leg[] | null;
   className?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
@@ -62,13 +67,41 @@ export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelec
 
   useEffect(() => {
     const m = map.current;
-    if (!m) return;
+    if (!m || route) return;
     const lines = corridors.map((c) => {
       const path = (c.path as [number, number][]).map(([lng, lat]) => [lat, lng] as [number, number]);
       return L.polyline(path, { color: c.color, weight: 3, opacity: 0.55 }).bindTooltip(c.name, { sticky: true }).addTo(m);
     });
     return () => lines.forEach((l) => l.remove());
-  }, [corridors]);
+  }, [corridors, route]);
+
+  // The route, and the whole of it in view the first time it arrives.
+  const fitted = useRef(false);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !route) return;
+    const ink = colour('grey');
+    const layers: L.Layer[] = [];
+    const bounds = L.latLngBounds([]);
+    for (const leg of route) {
+      if (!leg.path || leg.path.length < 2 || (leg.kind !== 'drive' && leg.kind !== 'ferry')) continue;
+      const path = leg.path.map(([lng, lat]) => [lat, lng] as [number, number]);
+      path.forEach((p) => bounds.extend(p));
+      const done = leg.status === 'done';
+      const via = leg.source === 'google' ? 'Google Maps route' : leg.kind === 'ferry' ? 'ferry crossing' : 'straight-line estimate';
+      layers.push(
+        L.polyline(path, {
+          color: ink, weight: leg.kind === 'ferry' ? 3 : 4, opacity: done ? 0.35 : 0.85,
+          dashArray: leg.kind === 'ferry' ? '6 8' : undefined,
+        }).bindTooltip(`${leg.title}${leg.km ? ` · ${Math.round(leg.km)} km` : ''} · ${via}`, { sticky: true }).addTo(m),
+      );
+    }
+    if (!fitted.current && bounds.isValid()) {
+      fitted.current = true;
+      m.fitBounds(bounds, { padding: [24, 24] });
+    }
+    return () => layers.forEach((l) => l.remove());
+  }, [route]);
 
   // Follow the car, but only once it leaves the middle of the view.
   useEffect(() => {
