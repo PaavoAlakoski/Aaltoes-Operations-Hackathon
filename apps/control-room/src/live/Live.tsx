@@ -302,6 +302,49 @@ export function OrderLive({ reference }: { reference: string }) {
   );
 }
 
+/**
+ * What the agent did when there is no proposal: it handled the incident itself
+ * (set the car's status, messaged the driver, or judged it one for a person),
+ * or its run failed. Until either is recorded, it is still looking.
+ */
+function AgentOutcome({ incident: i }: { incident: Incident }) {
+  const { agentNotes } = useOps();
+  const note = agentNotes.find((n) => (n.details as { incident_id?: string } | null)?.incident_id === i.id);
+  const d = (note?.details ?? {}) as { summary?: string; status?: string | null; notified?: boolean; error?: string };
+  if (note?.action === 'agent.handled') {
+    const urgent = /emergency|police|112|injur|ambulance/i.test(d.summary ?? '');
+    return (
+      <div className={s.outcome} data-tone={urgent ? 'urgent' : undefined} role={urgent ? 'alert' : undefined}>
+        <p className={s.outcomeTitle}>{urgent ? 'The agent says this needs a person now' : 'The agent handled this without a proposal'}</p>
+        {d.summary && <p>{d.summary}</p>}
+        <p className={s.meta}>
+          {d.status ? `Set the car to ${STATUS_WORD[d.status as Vehicle['status']]?.toLowerCase() ?? d.status}` : 'Car status unchanged'}
+          {' · '}{d.notified ? 'messaged the driver' : 'did not message the driver'} · {minutesAgo(note.created_at)}
+        </p>
+      </div>
+    );
+  }
+  if (note?.action === 'agent.triage_failed') {
+    const limited = /429|rate limit/i.test(d.error ?? '');
+    return (
+      <div className={s.outcome} data-tone="urgent" role="alert">
+        <p className={s.outcomeTitle}>The agent could not look into this</p>
+        <p>
+          {limited
+            ? 'Too many incidents reached the model at once (its rate limit), so this one has no proposal. Handle it by hand.'
+            : `Its run failed: ${(d.error ?? 'no reason recorded').slice(0, 240)}`}
+        </p>
+        <p className={s.meta}>{minutesAgo(note.created_at)}</p>
+      </div>
+    );
+  }
+  return (
+    <Empty title={i.source === 'agent' ? 'Raised by the agent.' : 'The agent is looking into this.'}>
+      Its proposal or what it decided appears here when it is ready, usually within half a minute.
+    </Empty>
+  );
+}
+
 function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle: Vehicle }) {
   const ops = useOps();
   const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
@@ -327,9 +370,7 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
       <div className={s.detailGrid} data-wide={wide || undefined}>
         <div>
           {proposals.length === 0 ? (
-            <Empty title={i.source === 'agent' ? 'Raised by the agent.' : 'The agent is looking into this.'}>
-              Its proposal appears here when it is ready, usually within half a minute. If none comes, the audit log says why.
-            </Empty>
+            <AgentOutcome incident={i} />
           ) : (
             proposals.map((p) => (
               <ProposalCard

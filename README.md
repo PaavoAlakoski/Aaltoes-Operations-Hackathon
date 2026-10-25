@@ -292,8 +292,12 @@ Drivers sign in to the driver app at `/driver`. Each is on one car:
 | Selma Talverick | `selma.talverick@demo.bahn.test` | Audi Q8 e-tron (`CD-420071`) | Hamburg – Frankfurt – Munich |
 | Elias Halverick | `elias.halverick@demo.bahn.test` | Porsche Macan (`CD-421024`), waiting for pickup | Hamburg – Frankfurt – Munich |
 
-The simulator signs in as all fifteen drivers with a car and puts each car
-where its itinerary says it is now: along the real road (Google Routes,
+Cars drive on their own: every 20 seconds the database (pg_cron,
+`drive_on_schedule`) puts each driving car where its itinerary says it is now,
+and the control room makes sure every car on a job has an itinerary while it
+is open (a demo reset deletes them). The simulator is optional: it adds a fix
+every 3 seconds over Broadcast and random incidents. It signs in as all
+fifteen drivers with a car and puts each car where its itinerary says it is now: along the real road (Google Routes,
 fetched once and cached) at road speed, stopped 45 minutes after every 4½
 hours at the wheel, waiting at the port, crossing on the ferry. In real time,
 so the cars creep. Cars waiting for pickup or delivered stay put; a random

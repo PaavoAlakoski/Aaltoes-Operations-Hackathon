@@ -1,8 +1,8 @@
 // The live operations room's data: who is signed in, the cars, incidents,
 // agent proposals and messages, kept current by Supabase Realtime.
 //   Postgres Changes  incidents, messages, agent_suggestions, vehicles, profiles,
-//                     pickup sites, driver trips, the driver market, stays and
-//                     itineraries (RLS applies)
+//                     pickup sites, driver trips, the driver market, stays,
+//                     itineraries and the agent's own records (RLS applies)
 //   Broadcast         corridor:<id>, live car positions sent by driver apps
 //   Presence          control-room, who is on shift and which incident each has open
 // Writes go through the RPCs only; the database decides what each role may do.
@@ -12,7 +12,7 @@ import {
   CONTROL_ROOM_TOPIC, POSITION_EVENT, corridorTopic, createOpsClient, groupProposals, keepPresence,
   type ControlRoomPresence, type Corridor, type DriverStay, type DriverTrip, type Incident, type Kpis, type MarketJob,
   type Itinerary, type Message, type OpsClient, type PickupSite, type PositionPayload, type Profile, type Proposal, type Suggestion,
-  type Vehicle,
+  type Tables, type Vehicle,
 } from '@bahn/shared';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -47,8 +47,10 @@ interface Ops {
   trips: DriverTrip[];
   jobs: MarketJob[];
   stays: DriverStay[];
-  /** By car; only the ones asked for with loadItinerary, then kept current. */
+  /** By car, kept current. Every car on a job gets one while the room is open, so it has a schedule to drive on. */
   itineraries: Map<string, Itinerary>;
+  /** What the agent concluded when it made no proposal (handled it itself, or failed), newest first. */
+  agentNotes: AgentNote[];
   /** Builds or fetches a car's itinerary (its road legs come from Google Routes for the demo cars). */
   loadItinerary: (vehicleId: string) => Promise<void>;
   kpis: Kpis | null;
@@ -70,6 +72,12 @@ interface Ops {
   resetDemo: () => Promise<{ messages: number; chat: number; incidents: number; suggestions: number }>;
   setVehicleStatus: (vehicleId: string, status: Vehicle['status'], reason: string) => Promise<void>;
 }
+
+/** The agent's audit records the room shows: a run that ended without a proposal. */
+export type AgentNote = Tables<'audit_log'>;
+const NOTE_ACTIONS = ['agent.handled', 'agent.triage_failed'];
+/** How often the room makes sure every car on a job has a fresh itinerary. */
+const ITINERARIES_EVERY_MS = 10 * 60_000;
 
 const Ctx = createContext<Ops | null>(null);
 
@@ -108,6 +116,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<MarketJob[]>([]);
   const [stays, setStays] = useState<DriverStay[]>([]);
   const [itineraries, setItineraries] = useState(new Map<string, Itinerary>());
+  const [agentNotes, setAgentNotes] = useState<AgentNote[]>([]);
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [online, setOnline] = useState<ControlRoomPresence[]>([]);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -138,7 +147,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
   // Everything the room shows; again after a reset, when most of it changed at once.
   const loadAll = useCallback(async (sb: OpsClient) => {
     const since = new Date(Date.now() - 48 * 3600_000).toISOString();
-    const [cs, vs, is, ss, ms, ps, k, sts, ts, js, ds] = await Promise.all([
+    const [cs, vs, is, ss, ms, ps, k, sts, ts, js, ds, ns] = await Promise.all([
       sb.from('corridors').select('*').order('id'),
       sb.from('vehicles').select('*'),
       sb.from('incidents').select('*').or(`status.neq.resolved,created_at.gte.${since}`).order('created_at', { ascending: false }).limit(200),
@@ -150,6 +159,8 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       sb.from('driver_trips').select('*').order('created_at', { ascending: false }).limit(100),
       sb.from('market_jobs').select('*'),
       sb.from('driver_stays').select('*').order('created_at', { ascending: false }).limit(100),
+      sb.from('audit_log').select('*').eq('actor_type', 'agent').in('action', NOTE_ACTIONS).gte('created_at', since)
+        .order('created_at', { ascending: false }).limit(200),
     ]);
     setCorridors(check(cs));
     setVehicles(new Map(check(vs).map((v) => [v.id, v])));
@@ -162,7 +173,26 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     setTrips(check(ts));
     setJobs(check(js));
     setStays(check(ds));
+    setAgentNotes(check(ns));
     return check(cs);
+  }, []);
+
+  // Every car on a job gets an itinerary (built for its driver, roads from
+  // route_cache), so the database can drive it on schedule (drive_on_schedule).
+  // A reset deletes them all; nobody else rebuilds them until a driver signs in.
+  const ensureItineraries = useCallback(async (sb: OpsClient) => {
+    const { data } = await sb.from('vehicles').select('id').not('order_id', 'is', null).neq('status', 'delivered');
+    const ids = (data ?? []).map((v) => v.id);
+    for (let i = 0; i < ids.length; i += 4) {
+      const rows = await Promise.all(ids.slice(i, i + 4).map((id) =>
+        sb.functions.invoke<{ itinerary: Itinerary | null }>('build-itinerary', { body: { vehicle_id: id } })
+          .then(({ data: r }) => r?.itinerary ?? null, () => null)));
+      setItineraries((m) => {
+        const next = new Map(m);
+        for (const it of rows) if (it) next.set(it.vehicle_id, it);
+        return next;
+      });
+    }
   }, []);
 
   // Load everything once per sign-in, then subscribe.
@@ -178,6 +208,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const sb = client();
     const channels: ReturnType<OpsClient['channel']>[] = [];
+    const timers: ReturnType<typeof setInterval>[] = [];
     setStatus('loading');
     setError(null);
 
@@ -192,6 +223,8 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       const cs = await loadAll(sb);
       if (cancelled) return;
       setStatus('ready');
+      ensureItineraries(sb);
+      timers.push(setInterval(() => ensureItineraries(sb), ITINERARIES_EVERY_MS));
 
       // Private channels authorise with the signed-in user's token.
       await sb.realtime.setAuth();
@@ -240,7 +273,6 @@ export function OpsProvider({ children }: { children: ReactNode }) {
           if (p.eventType === 'DELETE') setStays((l) => l.filter((r) => r.id !== (p.old as DriverStay).id));
           else setStays((l) => upsert(l, p.new as DriverStay, byCreated));
         })
-        // Only cars already asked for: the rest are not on screen.
         .on('postgres_changes', { event: '*', schema: 'public', table: 'itineraries' }, (p) => {
           setItineraries((m) => {
             if (p.eventType === 'DELETE') {
@@ -251,8 +283,12 @@ export function OpsProvider({ children }: { children: ReactNode }) {
               return next;
             }
             const row = p.new as unknown as Itinerary;
-            return m.has(row.vehicle_id) ? new Map(m).set(row.vehicle_id, row) : m;
+            return new Map(m).set(row.vehicle_id, row);
           });
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_log' }, (p) => {
+          const row = p.new as AgentNote;
+          if (row.actor_type === 'agent' && NOTE_ACTIONS.includes(row.action)) setAgentNotes((l) => [row, ...l]);
         })
         .subscribe((s) => setLive(s === 'SUBSCRIBED' ? 'live' : s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' ? 'offline' : 'connecting'));
       channels.push(changes);
@@ -296,8 +332,9 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       presence.current = null;
       for (const ch of channels) sb.removeChannel(ch);
+      for (const t of timers) clearInterval(t);
     };
-  }, [authReady, userId, refreshKpis, loadAll]);
+  }, [authReady, userId, refreshKpis, loadAll, ensureItineraries]);
 
   // Tell the rest of the room which incident this person is looking at.
   useEffect(() => {
@@ -320,7 +357,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     const replaceIncident = (row: Incident) => setIncidents((l) => upsert(l, row, byCreated));
     return {
       status: !authReady ? 'loading' : status,
-      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, kpis, online,
+      error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, agentNotes, kpis, online,
       viewing, setViewing,
       loadItinerary,
       signIn: async (email, password) => {
@@ -351,6 +388,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       resetDemo: async () => {
         const counts = check(await sb().rpc('reset_demo')) as { messages: number; chat: number; incidents: number; suggestions: number };
         await loadAll(sb());
+        ensureItineraries(sb());
         return counts;
       },
       setVehicleStatus: async (vehicleId, s, reason) => {
@@ -358,7 +396,7 @@ export function OpsProvider({ children }: { children: ReactNode }) {
         setVehicles((m) => new Map(m).set(v.id, v));
       },
     };
-  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, kpis, online, viewing, refreshKpis, loadAll, loadItinerary]);
+  }, [authReady, status, error, profile, live, corridors, vehicles, incidents, proposals, messages, staff, sites, trips, jobs, stays, itineraries, agentNotes, kpis, online, viewing, refreshKpis, loadAll, loadItinerary, ensureItineraries]);
 
   return <Ctx.Provider value={ops}>{children}</Ctx.Provider>;
 }

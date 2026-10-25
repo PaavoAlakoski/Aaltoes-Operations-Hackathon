@@ -124,6 +124,11 @@ a.row:hover { background: var(--row-hover); }
 .detail { min-width: 0; }
 .detailHead { display: flex; flex-wrap: wrap; gap: var(--s3); justify-content: space-between; margin-bottom: var(--s4); }
 .description { margin-top: var(--s2); max-width: 70ch; }
+
+/* What the agent did when it made no proposal. */
+.outcome { border: 1px solid var(--line-strong); border-left-width: 4px; border-radius: var(--radius); padding: var(--s4); display: grid; gap: var(--s2); max-width: 70ch; }
+.outcome[data-tone='urgent'] { border-left-color: var(--red); }
+.outcomeTitle { font-weight: 600; }
 .detailGrid { display: grid; gap: var(--s5); grid-template-columns: 1fr; }
 @media (min-width: 960px) {
   .detailGrid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }

@@ -20,6 +20,7 @@ anyone). The rest is the live operations backend and does not touch them.
 | `…183518_train_delay` | pickup sites, driver trips and positions, the driver market, driver stays; the pickup-watch cron; reassign, stay and job moves; `answer_market_job`; the train-delay scenario |
 | `…184616_recovery_messages` | the agent's own driver message replaces the standard text instead of repeating it |
 | `…102829_auto_resolve_incident` | an incident resolves itself once every move is settled, one ran and a person decided one (a failed move keeps it open) |
+| `…112243_drive_on_schedule` | every 20 s pg_cron puts each driving car where its itinerary says it is now (the same rule as `scheduledPosition`), unless a driver app or the simulator sent its position in the last minute; `audit_log` joins Realtime so the control room shows what the agent decided without a proposal |
 
 Vocabulary: the brief's "lines" are **corridors** (routes cars are driven along, some with a ferry);
 "vehicles" are **the cars being delivered**, one driver each.
