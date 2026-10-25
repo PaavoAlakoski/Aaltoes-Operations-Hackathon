@@ -1,7 +1,7 @@
 // One order, one decision: what happened, what the agent found or proposes,
 // the evidence, and what happens if you approve, change or reject it.
 import { useEffect, useMemo, useState, useId } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { useStore } from '../data/store';
 import { attachmentUrl } from '../data/api';
 import { caseView, WHO_LABEL, type TimelineEntry } from '../domain/caseView';
@@ -20,20 +20,8 @@ import { Icon } from '../ui/Icon';
 import { OrderLive } from '../live/Live';
 import s from './OrderPage.module.css';
 
-// The lists that link here say so in the link's state, so "back" returns to
-// the list the person came from. A direct visit goes back to Needs action.
-const BACK: Record<string, string> = { '/orders': 'All orders', '/inbox': 'Inbox' };
-
-function useBack() {
-  const state: unknown = useLocation().state;
-  const from = typeof state === 'object' && state !== null && 'from' in state ? String(state.from) : '';
-  const to = from in BACK ? from : '/';
-  return <Link to={to} className={s.back}><Icon name="back" /> {BACK[to] ?? 'Needs action'}</Link>;
-}
-
 export function OrderPage() {
   const { ref = '' } = useParams();
-  const back = useBack();
   const { status, error, retry, world, triage, decisions } = useStore();
 
   const bundle = world?.byReference.get(ref.toUpperCase());
@@ -56,10 +44,10 @@ export function OrderPage() {
   const others = open.filter((i) => i.id !== lead?.id);
   const decidedOthers = view ? view.decided.filter((i) => i.id !== lead?.id) : [];
 
-  if (status === 'error') return <Page title={ref} width="order"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
+  if (status === 'error') return <Page title={ref} width="list"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
   if (status === 'loading' || !world) {
     return (
-      <Page title={ref} width="order" meta="Loading the order…">
+      <Page title={ref} width="list" meta="Loading the order…">
         <SkeletonRows rows={4} label="Loading the order" />
       </Page>
     );
@@ -79,8 +67,7 @@ export function OrderPage() {
 
   return (
     <Page
-      width="order"
-      back={back}
+      width="list"
       title={h.car}
       meta={
         <span className={s.headMeta}>
@@ -97,7 +84,6 @@ export function OrderPage() {
         </span>
       ) : undefined}
     >
-      {view.headline && <p className={s.headline}>{view.headline}</p>}
       <OrderLive reference={h.reference} />
 
       <div className={s.grid}>
@@ -128,8 +114,10 @@ export function OrderPage() {
           <Timeline entries={view.timeline} now={now} />
         </div>
 
-        <aside className={s.right} aria-label="Facts">
-          <h2 className="visually-hidden">Facts</h2>
+        {/* The order's facts fold away: the decision and what happened come first. */}
+        <details className={`${s.section} ${s.right}`}>
+          <summary className={s.sectionTitle}>Order details</summary>
+          <div className={s.factsGrid}>
           {view.facts.map((sec) => (
             <section key={sec.title} className={s.factSection}>
               <h2 className={s.sectionTitle}>{sec.title}</h2>
@@ -154,7 +142,8 @@ export function OrderPage() {
               </ul>
             </section>
           )}
-        </aside>
+          </div>
+        </details>
       </div>
     </Page>
   );
@@ -183,10 +172,17 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
   const clock = clockPhrase(item.clock, now);
   return (
     <article className={s.lead} aria-labelledby="lead-title">
-      <p className={s.kicker}><Dot tone={p ? 'teal' : riskTone(item.risk)} /> {kicker(item, world)}</p>
-      <h2 id="lead-title" className={s.leadTitle}>{item.title}</h2>
-      {item.detail && (
-        <p className={s.detail}>{item.detail}</p>
+      {/* A pending proposal's title is generic, so its description carries the card. */}
+      {p?.status === 'PENDING_REVIEW' && item.detail ? (
+        <>
+          <h2 id="lead-title" className={s.leadLabel}>{item.title}</h2>
+          <p className={s.statement}>{item.detail}</p>
+        </>
+      ) : (
+        <>
+          <h2 id="lead-title" className={s.leadTitle}>{item.title}</h2>
+          {item.detail && <p className={s.detail}>{item.detail}</p>}
+        </>
       )}
 
       {p && p.status !== 'FAILED' && (
@@ -216,7 +212,7 @@ function Lead({ item, world }: { item: AttentionItem; world: World }) {
 
       {!p && (
         <div className={s.block}>
-          <h3 className={s.blockTitle}>Next step</h3>
+          <h3 className={s.blockTitle}>{item.actions.length ? 'Next step' : 'The agent’s next step'}</h3>
           <p>{item.next.text}</p>
           <p className={s.meta}>
             {[clock, item.owner ? deskName(world, item.owner) : 'No owner yet'].filter(Boolean).join(' · ')}

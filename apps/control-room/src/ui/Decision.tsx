@@ -30,7 +30,7 @@ export function OutcomeList({ steps, label }: { steps: OutcomeStep[]; label?: st
 const CONFIRM_TITLE: Record<ActionKind, string> = {
   approve: 'If you approve', change: 'If you change it', reject: 'If you reject it', retry: 'If you retry',
   take: 'If you take it', already_sorted: 'If it’s already sorted', done: 'If you mark it handled',
-  link: 'If it’s this order', not_this: 'If it’s not this one',
+  link: 'If you approve the match', not_this: 'If you reject the match',
 };
 
 const NOTE_PROMPT: Partial<Record<ActionKind, string>> = {
@@ -56,6 +56,10 @@ export function DecisionControls({ item, compact = false }: { item: AttentionIte
 
   if (!world) return null;
   if (item.decision) return <Decided decision={item.decision} />;
+  // No decision to make: the agent works this itself and brings a proposal when a yes or no is needed.
+  if (item.actions.length === 0) {
+    return <p className={s.agentOn}>The agent is on this. If it needs a decision, it brings you a proposal to approve or reject.</p>;
+  }
 
   const needsNote = picked ? NEEDS_NOTE.has(picked) : false;
   const steps = picked ? outcomeSteps(item, picked, note, world) : [];

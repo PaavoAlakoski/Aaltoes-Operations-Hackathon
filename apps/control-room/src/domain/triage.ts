@@ -3,7 +3,7 @@
 import type { Decision } from './types';
 import type { OrderBundle, World } from './world';
 import type { NextStep } from './nextStep';
-import { GROUP_ORDER, applyDecisions, isOpen, orderItems, type AttentionItem, type Clock, type Group, type Risk } from './attention';
+import { GROUP_ORDER, applyDecisions, isOpen, needsDecision, orderItems, type AttentionItem, type Clock, type Group, type Risk } from './attention';
 
 export interface QueueRow {
   orderId: string;
@@ -25,7 +25,7 @@ export interface QueueRow {
 export interface Triage {
   rows: QueueRow[];
   byGroup: Record<Group, QueueRow[]>;
-  /** Orders with nothing open. Quiet is not the same as verified. */
+  /** Orders with no decision waiting: nothing open, or only what the agent is working on. */
   quiet: OrderBundle[];
   /** Every item on every order, with decisions applied. */
   allItems: Map<string, AttentionItem[]>;
@@ -82,14 +82,16 @@ export function triage(world: World, decisions: Decision[]): Triage {
     const items = applyDecisions(orderItems(b, world), decisions);
     allItems.set(order.id, items);
     const open = items.filter(isOpen);
-    const lead = leadItem(open);
+    // Only a decision brings an order to a person; the agent works the other open items itself.
+    const waiting = open.filter(needsDecision);
+    const lead = leadItem(waiting);
     if (!lead) {
       quiet.push(b);
       continue;
     }
-    const group = open.map((i) => i.group).sort((x, y) => groupRank(x) - groupRank(y))[0]!;
+    const group = waiting.map((i) => i.group).sort((x, y) => groupRank(x) - groupRank(y))[0]!;
     const risk = Math.max(...open.map((i) => i.risk)) as Risk;
-    const inGroup = open.filter((i) => i.group === group && i.clock).sort((x, y) => clockMs(x.clock) - clockMs(y.clock));
+    const inGroup = waiting.filter((i) => i.group === group && i.clock).sort((x, y) => clockMs(x.clock) - clockMs(y.clock));
     rows.push({
       orderId: order.id, reference: order.reference, bundle: b, group, risk,
       clock: inGroup[0]?.clock ?? lead.clock, lead, reason: situationItem(open)!.title, items: open, next: rowNextStep(lead, open),

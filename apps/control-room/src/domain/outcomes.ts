@@ -6,7 +6,7 @@ import type { World } from './world';
 import { payloadSteps, rechecksBeforeActing } from './proposals';
 import { recordedEffects } from './evidence';
 
-const LEAVES = 'It leaves the queue and shows under “Decided this shift”, where you can undo it.';
+const LEAVES = 'It leaves the queue. You can undo it on the order page.';
 
 export function outcomeSteps(item: AttentionItem, action: ActionKind, note: string, world: World): OutcomeStep[] {
   const steps: OutcomeStep[] = [];

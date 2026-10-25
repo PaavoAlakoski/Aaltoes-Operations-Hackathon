@@ -55,7 +55,7 @@ describe('before saving, every action shows a numbered outcome', () => {
     const steps = outcomeSteps(item, 'approve', '', world);
     expect(steps[0]!.text).toMatch(/re-checks the order before acting/);
     expect(steps.some((s) => s.by === 'person')).toBe(true);
-    expect(steps.at(-1)!.text).toMatch(/Decided this shift/);
+    expect(steps.at(-1)!.text).toMatch(/undo it on the order page/);
   });
   it('change, reject, done and already sorted need a note', () => {
     expect([...NEEDS_NOTE].sort()).toEqual(['already_sorted', 'change', 'done', 'reject']);
@@ -91,10 +91,10 @@ describe('next-step sourcing: record, then agent, then playbook', () => {
     }
   });
 
-  it('the queue row for the breakdown uses the recorded recovery step, not a playbook line', () => {
-    const row = triage(world, []).rows.find((r) => r.reference === 'CD-420322')!;
-    expect(row.next.source).toBe('record');
-    expect(row.next.text).toMatch(/owner's service decision/);
+  it('a queue row shows the agent proposal as its next step, not a playbook line', () => {
+    const row = triage(world, []).rows.find((r) => r.reference === 'CD-420593')!;
+    expect(row.next.source).toBe('agent');
+    expect(row.next.text).toMatch(/^Agent proposes:/);
   });
 });
 

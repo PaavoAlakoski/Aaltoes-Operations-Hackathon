@@ -126,3 +126,8 @@
 .decidedNote {
   color: var(--text-meta);
 }
+
+.agentOn {
+  font-size: var(--size-meta);
+  color: var(--text-meta);
+}

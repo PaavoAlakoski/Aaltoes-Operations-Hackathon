@@ -360,23 +360,11 @@ export function OrderLive({ reference }: { reference: string }) {
 
 function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle: Vehicle }) {
   const ops = useOps();
-  const staff = ops.staff.filter((p) => p.role !== 'driver');
   const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
   const proposals = ops.proposals.filter((p) => p.incidentId === i.id);
   // A double recovery's two lanes need the full width; the conversation goes below.
   const wide = proposals.some((p) => p.moves.some((m) => ['reassign_driver', 'book_stay', 'offer_market_job'].includes(m.suggestion_type)));
-  const [note, setNote] = useState('');
-  const [err, setErr] = useState<string | null>(null);
   const name = (id: string | null) => ops.staff.find((p) => p.id === id)?.full_name;
-
-  async function act(fn: () => Promise<void>) {
-    setErr(null);
-    try {
-      await fn();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   return (
     <article className={s.detail} aria-label="Incident">
@@ -390,27 +378,7 @@ function IncidentDetail({ incident: i, vehicle }: { incident: Incident; vehicle:
           </p>
           {i.description && <p className={s.description}>{i.description}</p>}
         </div>
-        <div className={s.actions}>
-          {i.status === 'open' && <button type="button" className={s.primary} onClick={() => act(() => ops.acknowledge(i.id))}>Acknowledge</button>}
-          {i.status !== 'resolved' && (
-            <>
-              <label className={s.inline}>
-                <span className="visually-hidden">Assign to</span>
-                <select className={s.input} value={i.assigned_to ?? ''} onChange={(e) => act(() => ops.assign(i.id, e.target.value || null))}>
-                  <option value="">Nobody</option>
-                  {staff.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                </select>
-              </label>
-              <form className={s.inline} onSubmit={(e) => { e.preventDefault(); act(() => ops.resolve(i.id, note)); }}>
-                <label className="visually-hidden" htmlFor="resolve-note">How it was resolved</label>
-                <input id="resolve-note" className={s.input} placeholder="How was it resolved?" value={note} onChange={(e) => setNote(e.target.value)} />
-                <button type="submit" className={s.button}>Resolve</button>
-              </form>
-            </>
-          )}
-        </div>
       </header>
-      {err && <p className={s.error} role="alert">{err}</p>}
 
       <div className={s.detailGrid} data-wide={wide || undefined}>
         <div>

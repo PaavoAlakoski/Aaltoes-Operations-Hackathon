@@ -266,8 +266,9 @@ export const ACTION_LABEL = {
   take: 'I’ll take it',
   already_sorted: 'Already sorted',
   done: 'Mark handled',
-  link: 'It’s this order',
-  not_this: 'Not this one',
+  // A suggested match is the agent's proposal: a person approves or rejects it.
+  link: 'Approve',
+  not_this: 'Reject',
 } as const;
 
 /** Failed proposals use "I'll handle it" instead of "I'll take it". */

@@ -21,32 +21,11 @@
   color: var(--text-meta);
 }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  font-size: var(--size-meta);
-  color: var(--text-meta);
-  text-decoration: none;
-}
-.back:hover {
-  color: var(--text);
-}
-
-.headline {
-  font-weight: var(--weight-bold);
-  max-width: 72ch;
-  margin-bottom: var(--s5);
-}
-
 .grid {
+  /* One column: the decision, then the order details (folded), then what happened. */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  grid-template-areas:
-    'main facts'
-    'history facts';
-  grid-template-rows: auto 1fr;
-  column-gap: var(--s6);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'main' 'facts' 'history';
   align-items: start;
 }
 
@@ -62,13 +41,14 @@
 
 .right {
   grid-area: facts;
-  align-self: start;
-  position: sticky;
-  top: 80px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
   min-width: 0;
+}
+
+.factsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s5) var(--s6);
+  margin-top: var(--s3);
 }
 
 .lead {
@@ -91,21 +71,27 @@
   gap: var(--s2);
 }
 
-.kicker {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: var(--size-meta);
-  color: var(--text-meta);
-}
-
 .leadTitle {
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
 }
 
 .detail {
-  max-width: 68ch;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.leadLabel {
+  font-size: var(--size-meta);
+  font-weight: var(--weight-bold);
+  color: var(--text-meta);
+}
+
+.statement {
+  font-size: 19px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--text);
 }
 
 .block {
@@ -251,7 +237,6 @@ summary.sectionTitle {
   text-decoration-color: var(--line-strong);
 }
 
-
 .timeline {
   margin-top: var(--s3);
   border-top: 1px solid var(--line);
@@ -303,19 +288,6 @@ summary.sectionTitle {
   text-decoration: underline;
   text-decoration-color: var(--line-strong);
   text-underline-offset: 4px;
-}
-
-@media (max-width: 959px) {
-  /* On a narrow screen: the decision, then the facts, then the history. */
-  .grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'main' 'facts' 'history';
-    grid-template-rows: auto;
-  }
-  .right {
-    position: static;
-    margin-top: var(--s6);
-  }
 }
 
 @media (max-width: 719px) {

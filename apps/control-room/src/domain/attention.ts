@@ -102,6 +102,9 @@ function riskGroup(risk: Risk, clock: Clock | null, now: string): Group {
   return 'follow';
 }
 
+/** Signals the agent works on by itself: no button for a person until it brings a proposal. */
+const AGENT_HANDLES: ActionKind[] = [];
+
 /** Every attention item on one order, before decisions are applied. */
 export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
   const now = world.snapshotAt;
@@ -124,13 +127,15 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
     items.push({
       id: p.id, orderId: oid, kind: 'proposal', source: { table: 'agent_proposals', id: p.id },
       title: failed ? `${agentTitle(world, p.proposed_by_agent_id)}: attempt failed` : pending
-        ? `${agentTitle(world, p.proposed_by_agent_id)} needs your yes`
+        ? 'Needs human confirmation'
         : `${agentTitle(world, p.proposed_by_agent_id)}: approved, not done yet`,
       detail: failed ? p.execution?.error ?? null : p.rationale,
-      status: p.status, risk, clock: deciding, owner: alert?.owner ?? p.review?.reviewer_id ?? null, waitingOn: pending || failed ? null : 'agent',
-      group: pending || failed ? 'decide' : 'waiting',
+      // Only a pending proposal is a person's decision. A failed attempt goes back to the agent, which
+      // comes back with a new proposal; an approved one is the agent's to carry out.
+      status: p.status, risk, clock: deciding, owner: alert?.owner ?? p.review?.reviewer_id ?? null, waitingOn: pending ? null : 'agent',
+      group: pending ? 'decide' : 'waiting',
       next: { text: proposalNextLine(p, world), source: 'agent' },
-      actions: pending ? ['approve', 'change', 'reject'] : failed ? ['retry', 'take', 'already_sorted'] : ['take', 'done'],
+      actions: pending ? ['approve', 'reject'] : [],
       proposal: p, raisedAt: p.created_at,
     });
   }
@@ -144,7 +149,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       status: a.status, risk, clock: deciding, owner: a.owner ?? null, waitingOn: null,
       group: riskGroup(risk, deciding, now),
       next: chooseNextStep(a.next_action, agentLine, `alert:${a.signal}`),
-      actions: ['take', 'done'], raisedAt: a.triggered_at,
+      actions: AGENT_HANDLES, raisedAt: a.triggered_at,
     });
   }
 
@@ -158,7 +163,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       status: i.status, risk, clock: deciding, owner: i.owner, waitingOn: null,
       group: riskGroup(risk, deciding, now),
       next: chooseNextStep(null, agentLine, `incident:${i.kind}`),
-      actions: ['take', 'done'], raisedAt: i.opened_at,
+      actions: AGENT_HANDLES, raisedAt: i.opened_at,
     });
   }
 
@@ -172,7 +177,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       status: w.status, risk, clock, owner: w.owner, waitingOn: null,
       group: riskGroup(risk, clock, now),
       next: chooseNextStep(w.next_action, agentLine, 'work_item'),
-      actions: ['take', 'done'], raisedAt: w.opened_at,
+      actions: AGENT_HANDLES, raisedAt: w.opened_at,
     });
   }
 
@@ -192,7 +197,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       status: c.status, risk: external ? 1 : 0, clock, owner: c.owner ?? null, waitingOn: c.waiting_on ?? null,
       group: external && clock && !isPast(clock.at, now) ? 'waiting' : 'follow',
       next: chooseNextStep(recordWait, agentLine, 'conversation'),
-      actions: ['take', 'done'], raisedAt: latest?.authored_at ?? c.updated_at,
+      actions: AGENT_HANDLES, raisedAt: latest?.authored_at ?? c.updated_at,
     });
   }
 
@@ -202,7 +207,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       id: cl.id, orderId: oid, kind: 'claim', source: { table: 'endpoint_claims', id: cl.id },
       title: `Unresolved statement about the ${cl.field.replace(/_/g, ' ')}`, detail: cl.claim,
       status: cl.resolution_status, risk: 1, clock: deciding, owner: null, waitingOn: null, group: 'follow',
-      next: chooseNextStep(null, agentLine, 'claim'), actions: ['take', 'done'], raisedAt: cl.recorded_at,
+      next: chooseNextStep(null, agentLine, 'claim'), actions: AGENT_HANDLES, raisedAt: cl.recorded_at,
     });
   }
 
@@ -213,7 +218,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       id: k.id, orderId: oid, kind: 'custody', source: { table: 'custody_assets', id: k.id },
       title: k.kind === 'KEY_SET' ? 'Who holds the keys is unknown' : 'Custody unknown', detail: k.label,
       status: k.status, risk: 1, clock, owner: k.followup_owner, waitingOn: null, group: 'follow',
-      next: chooseNextStep(k.next_action, agentLine, 'custody'), actions: ['take', 'done'], raisedAt: null,
+      next: chooseNextStep(k.next_action, agentLine, 'custody'), actions: AGENT_HANDLES, raisedAt: null,
     });
   }
 
@@ -227,7 +232,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
       status: t.status, risk: 0, clock: null, owner: t.owner, waitingOn: t.waiting_on,
       group: external ? 'waiting' : 'follow',
       next: chooseNextStep(t.waiting_on ? `Waiting on ${waitingOnLabel(t.waiting_on)}.` : null, null, 'inbox:linked'),
-      actions: ['take', 'done'], thread: t, raisedAt: t.opened_at,
+      actions: AGENT_HANDLES, thread: t, raisedAt: t.opened_at,
     });
   }
 
@@ -235,7 +240,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
   for (const t of world.inboxThreads.filter((x) => x.status === 'OPEN' && (x.linked_order_ids ?? []).length === 0 && (x.candidate_order_ids ?? []).includes(oid))) {
     items.push({
       id: `${t.id}#${oid}`, orderId: oid, kind: 'inbox_candidate', source: { table: 'support_inbox_threads', id: t.id },
-      title: 'An unmatched message may be about this order',
+      title: 'The agent thinks an unmatched message is about this order',
       detail: world.inboxMessages.get(t.id)?.find((m) => m.author_type !== 'operator')?.body ?? null,
       status: t.link_state, risk: 1, clock: deciding, owner: t.owner, waitingOn: null, group: 'follow',
       next: chooseNextStep(null, null, 'inbox'), actions: ['link', 'not_this'], thread: t, raisedAt: t.opened_at,
@@ -254,7 +259,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
         id: `derived:pickup-check:${oid}`, orderId: oid, kind: 'pickup_check', source: { table: 'order_endpoint_details', id: ep.id },
         title: 'Driver booked, but the pickup contact or access isn’t checked', detail: null,
         status: null, risk: soon ? 1 : 0, clock: { at: slot.start_at, what: 'pickup' }, owner: null, waitingOn: null, group: 'follow',
-        next: chooseNextStep(null, agentLine, 'pickup_check'), actions: ['take', 'done'], raisedAt: null,
+        next: chooseNextStep(null, agentLine, 'pickup_check'), actions: AGENT_HANDLES, raisedAt: null,
       });
     }
   }
@@ -269,7 +274,7 @@ export function orderItems(b: OrderBundle, world: World): AttentionItem[] {
           id: `derived:silent-driver:${oid}:${a.id}`, orderId: oid, kind: 'silent_driver', source: { table: 'work_assignments', id: a.id },
           title: 'Driver started, but the app has sent no position', detail: null,
           status: null, risk: 2, clock: promise, owner: null, waitingOn: null, group: riskGroup(2, promise, now),
-          next: chooseNextStep(null, agentLine, 'silent_driver'), actions: ['take', 'done'], raisedAt: a.started_at,
+          next: chooseNextStep(null, agentLine, 'silent_driver'), actions: AGENT_HANDLES, raisedAt: a.started_at,
         });
       }
     }
@@ -296,3 +301,5 @@ export function applyDecisions(items: AttentionItem[], decisions: Decision[]): A
 }
 
 export const isOpen = (it: AttentionItem) => !it.decision;
+/** Open and waiting on a person's yes or no. Everything else is the agent's. */
+export const needsDecision = (it: AttentionItem) => isOpen(it) && it.actions.length > 0;

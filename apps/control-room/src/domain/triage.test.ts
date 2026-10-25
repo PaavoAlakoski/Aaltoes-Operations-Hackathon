@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { packetRows, packetWorld } from './testing/loadPacket';
 import { buildWorld } from './world';
 import { triage, compareItems, leadItem } from './triage';
-import { GROUP_ORDER, orderItems } from './attention';
+import { GROUP_ORDER, needsDecision, orderItems } from './attention';
 import type { Decision } from './types';
 
 const world = packetWorld();
@@ -18,15 +18,26 @@ function decision(over: Partial<Decision>): Decision {
 describe('triage groups', () => {
   const t = triage(world, []);
 
-  it('brings only the orders that need a person, and collapses the rest', () => {
+  it('brings a person only the orders with a decision waiting, and leaves the rest to the agent', () => {
     expect(t.rows.length + t.quiet.length).toBe(100);
-    expect(t.rows.length).toBe(43);
-    expect(t.quiet.every((b) => orderItems(b, world).length === 0)).toBe(true);
+    // Four agent proposals waiting for a yes, and two messages the agent matched to an order.
+    expect(t.rows.map((r) => r.reference).sort()).toEqual(['CD-420055', 'CD-420089', 'CD-420299', 'CD-420399', 'CD-420593', 'CD-420719']);
+    expect(t.quiet.every((b) => !orderItems(b, world).some(needsDecision))).toBe(true);
+    expect(t.rows.every((r) => needsDecision(r.lead))).toBe(true);
   });
 
-  it('puts a critical safety stop first', () => {
-    expect(t.byGroup.decide[0]!.reference).toBe('CD-420322');
-    expect(t.byGroup.decide[0]!.risk).toBe(3);
+  it('offers a person only Approve and Reject; everything else has no button', () => {
+    for (const items of t.allItems.values()) {
+      for (const i of items) {
+        if (i.kind === 'inbox_candidate') expect(i.actions).toEqual(['link', 'not_this']);
+        else expect(i.actions.every((a) => a === 'approve' || a === 'reject'), `${i.kind} ${i.id}`).toBe(true);
+      }
+    }
+  });
+
+  it('leaves a critical safety stop with the agent until it brings a proposal', () => {
+    expect(t.rows.find((x) => x.reference === 'CD-420322')).toBeUndefined();
+    expect(orderItems(ref('CD-420322'), world).some((i) => i.risk === 3)).toBe(true);
   });
 
   it('puts agents waiting for a yes in Decide now', () => {
@@ -35,15 +46,14 @@ describe('triage groups', () => {
     }
   });
 
-  it('puts a missed delivery promise and a ferry cutoff in three hours in Decide now', () => {
-    expect(t.rows.find((x) => x.reference === 'CD-420702')?.group).toBe('decide');
-    const ferry = t.rows.find((x) => x.reference === 'CD-420603')!;
-    expect(ferry.group).toBe('decide');
-    expect(ferry.clock?.what).toBe('ferry check-in closes');
+  it('keeps signals without a proposal off the queue: a missed promise, a ferry cutoff, a thread waiting on a site', () => {
+    for (const r of ['CD-420702', 'CD-420603', 'CD-420015']) expect(t.rows.find((x) => x.reference === r), r).toBeUndefined();
   });
 
-  it('puts a thread waiting on a site, with a future check, in Waiting on others', () => {
-    expect(t.rows.find((x) => x.reference === 'CD-420015')?.group).toBe('waiting');
+  it('sends a failed attempt back to the agent instead of to a person', () => {
+    const failed = orderItems(ref('CD-420299'), world).find((i) => i.kind === 'proposal' && i.status === 'FAILED')!;
+    expect(failed.actions).toEqual([]);
+    expect(failed.waitingOn).toBe('agent');
   });
 
   it('orders rows by group, then risk, then the earliest clock', () => {
@@ -65,12 +75,10 @@ describe('triage groups', () => {
     expect(t.rows.find((x) => x.reference === 'CD-420299')!.lead.status).toBe('PENDING_REVIEW');
   });
 
-  it('leads the breakdown with the recovery decision, and says what happened in the row', () => {
-    const row = t.rows.find((x) => x.reference === 'CD-420322')!;
-    expect(row.lead.kind).toBe('work_item');
-    expect(row.lead.next.source).toBe('record');
-    expect(row.reason).toBe('Driver stopped: warning light');
-    expect(t.rows.find((x) => x.reference === 'CD-420593')!.reason).toBe('Driver found no car at pickup');
+  it('leads with the decision, and says what happened in the row', () => {
+    const row = t.rows.find((x) => x.reference === 'CD-420593')!;
+    expect(row.lead.kind).toBe('proposal');
+    expect(row.reason).toBe('Driver found no car at pickup');
   });
 
   it('counts a conversation filed on one order for the related order too', () => {
@@ -95,9 +103,9 @@ describe('decisions', () => {
   it('a decided item leaves the queue; undo brings it back', () => {
     const before = triage(world, []).rows.find((r) => r.reference === 'CD-420593')!;
     const after = triage(world, [decision({})]);
-    const row = after.rows.find((r) => r.reference === 'CD-420593');
-    expect(row?.items.some((i) => i.id === 'agent-x6ad46f8e74398f5e')).toBe(false);
-    expect(row!.items.length).toBe(before.items.length - 1);
+    // Its only decision is made, so the order leaves the queue; the agent carries on with the rest.
+    expect(before.lead.id).toBe('agent-x6ad46f8e74398f5e');
+    expect(after.rows.find((r) => r.reference === 'CD-420593')).toBeUndefined();
     const undone = triage(world, [decision({ undone_at: '2026-10-21T09:06:00Z' })]);
     expect(undone.rows.find((r) => r.reference === 'CD-420593')!.items.length).toBe(before.items.length);
   });

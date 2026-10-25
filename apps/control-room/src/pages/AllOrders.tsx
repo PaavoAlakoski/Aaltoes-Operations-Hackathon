@@ -87,10 +87,10 @@ export function AllOrders() {
                 className={s.clickable}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('a') || window.getSelection()?.toString()) return;
-                  navigate(`/orders/${h.reference}`, { state: { from: '/orders' } });
+                  navigate(`/orders/${h.reference}`);
                 }}
               >
-                <td data-label="Order"><Link to={`/orders/${h.reference}`} state={{ from: '/orders' }} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
+                <td data-label="Order"><Link to={`/orders/${h.reference}`} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
                 <td data-label="Car"><span className={s.car}>{car}</span><span className={s.route}>{h.route}</span></td>
                 <td data-label="Customer" className={s.meta}>{h.customer}</td>
                 <td data-label="Stage">{h.stageLabel}</td>

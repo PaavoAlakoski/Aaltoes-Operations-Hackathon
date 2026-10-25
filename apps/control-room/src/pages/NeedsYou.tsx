@@ -2,22 +2,18 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router';
 import { useStore } from '../data/store';
-import { actionLabel } from '../domain/labels';
 import { carName } from '../domain/caseView';
 import { NEEDS_YOU_LIMIT, type QueueRow } from '../domain/triage';
 import { Page } from '../ui/Page';
 import { Dot, Ref, clockPhrase, deskName, isOverdue, riskTone } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
-import { Icon } from '../ui/Icon';
 import { LiveNow } from '../live/Live';
 import { useOps } from '../live/ops';
 import s from './NeedsYou.module.css';
 
-/** The last 12 hours of real time count as this shift. */
-const SHIFT_MS = 12 * 3600_000;
 
 export function NeedsYou() {
-  const { status, error, retry, world, triage, decisions, undo } = useStore();
+  const { status, error, retry, world, triage } = useStore();
   const ops = useOps();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -49,8 +45,6 @@ export function NeedsYou() {
   // No count line: the tab's badge carries the number. Open road incidents are still worth a line.
   const meta = incidents ? `${incidents} open incidents on the road` : undefined;
   const now = world?.snapshotAt ?? '';
-  const since = Date.now() - SHIFT_MS;
-  const shift = decisions.filter((d) => !d.undone_at && Date.parse(d.decided_at) >= since);
 
   return (
     <Page title="Needs action" titleHidden meta={meta}>
@@ -68,29 +62,6 @@ export function NeedsYou() {
         </div>
       )}
 
-      {triage && world && shift.length > 0 && (
-        <section className={s.shift} aria-labelledby="shift">
-          <h2 id="shift" className={s.groupTitle}>Decided this shift <span className={s.groupCount}>{shift.length}</span></h2>
-          <ul className={s.rows}>
-            {shift.map((d) => {
-              const b = world.bundles.get(d.order_id);
-              const item = triage.allItems.get(d.order_id)?.find((i) => i.id === d.target_id);
-              return (
-                <li key={d.id} className={s.decidedRow}>
-                  <Link to={`/orders/${b?.order.reference ?? ''}`} className={s.decidedLink}>
-                    <span className={s.decidedRef}><Ref>{b?.order.reference}</Ref></span>
-                    <span>{item?.title ?? 'Item'}</span>
-                  </Link>
-                  <span className={s.decidedAction}>{actionLabel(d.action, item?.status === 'FAILED')}</span>
-                  <button type="button" className={s.undo} onClick={() => void undo(d.id)} aria-label={`Undo ${actionLabel(d.action)} on ${b?.order.reference}`}>
-                    <Icon name="undo" /> Undo
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
     </Page>
   );
 }
