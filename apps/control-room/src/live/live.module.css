@@ -65,10 +65,14 @@ textarea.input { width: 100%; resize: vertical; }
 .toggle { display: inline-flex; gap: var(--s1); align-items: center; font-size: var(--size-meta); color: var(--text-meta); }
 
 /* Sign-in */
-.signIn { display: grid; gap: var(--s2); }
-.signInPrompt { font-size: var(--size-meta); color: var(--text-meta); }
-.signInFields { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
-.signInFields .field { flex: 1 1 200px; }
+.account { position: relative; display: inline-flex; align-items: baseline; gap: var(--s3); font-size: var(--size-meta); color: var(--text-meta); white-space: nowrap; }
+.accountName { color: var(--text); }
+.accountPanel {
+  position: absolute; top: calc(100% + 14px); right: 0; z-index: 20; width: min(320px, calc(100vw - 32px));
+  display: grid; gap: var(--s3); padding: var(--s4); white-space: normal;
+  background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.accountFields { display: grid; gap: var(--s3); }
 .field { display: grid; gap: var(--s1); font-size: var(--size-meta); color: var(--text-meta); }
 
 /* On shift */

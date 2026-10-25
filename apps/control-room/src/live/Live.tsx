@@ -36,7 +36,8 @@ function orderPath(vehicle: Vehicle | undefined, incidentId?: string): string | 
 
 export function LiveNow() {
   const ops = useOps();
-  if (!opsConfigured) return null;
+  // Signed out, there is nothing to show here: sign in is in the header (Account).
+  if (!opsConfigured || ops.status === 'signed-out') return null;
   return (
     <section className={s.now} aria-labelledby="live-now">
       <div className={s.nowHead}>
@@ -51,7 +52,6 @@ export function LiveNow() {
 
 function LiveNowBody() {
   const ops = useOps();
-  if (ops.status === 'signed-out') return <SignIn />;
   if (ops.status === 'error') return <ErrorState message={ops.error ?? 'Unknown error'} />;
   if (ops.status === 'loading' || !ops.profile) return <SkeletonRows rows={3} label="Loading live operations" />;
   if (ops.profile.role === 'driver') {
@@ -60,14 +60,31 @@ function LiveNowBody() {
   return <Room />;
 }
 
-function SignIn() {
-  const { signIn } = useOps();
+/** Top right of the header: Sign in (opens a small form), or the signed-in name and Sign out. */
+export function Account() {
+  const ops = useOps();
+  const { signIn } = ops;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Signed out, the block is one quiet line, so the queue stays at the top.
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+  if (!opsConfigured) return null;
+  if (ops.status !== 'signed-out') {
+    if (ops.status === 'loading') return <span className={s.account}>Signing in…</span>;
+    return (
+      <span className={s.account}>
+        {ops.profile?.full_name && <span className={s.accountName}>{ops.profile.full_name}</span>}
+        <button type="button" className={s.textButton} onClick={() => void ops.signOut()}>Sign out</button>
+      </span>
+    );
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -80,17 +97,13 @@ function SignIn() {
       setBusy(false);
     }
   }
-  if (!open) {
-    return (
-      <p className={s.signInPrompt}>
-        Cars, drivers and incidents on the road, for staff.{' '}
-        <button type="button" className={s.textButton} onClick={() => setOpen(true)}>Sign in</button>
-      </p>
-    );
-  }
   return (
-    <form className={s.signIn} onSubmit={submit}>
-      <div className={s.signInFields}>
+    <span className={s.account}>
+      <button type="button" className={s.textButton} aria-expanded={open} onClick={() => setOpen((o) => !o)}>Sign in</button>
+      {open && (
+    <form className={s.accountPanel} onSubmit={submit} aria-label="Sign in">
+      <p className={s.meta}>For staff: cars, drivers and incidents on the road.</p>
+      <div className={s.accountFields}>
         <label className={s.field}>
           <span>Email</span>
           <input className={s.input} type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -103,6 +116,8 @@ function SignIn() {
       </div>
       {err && <p className={s.error} role="alert">{err}</p>}
     </form>
+      )}
+    </span>
   );
 }
 
@@ -225,14 +240,12 @@ function ResetDemo() {
 }
 
 function OnShift() {
-  const { online, profile, live, signOut } = useOps();
+  const { online, profile, live } = useOps();
   const others = online.filter((p) => p.user_id !== profile?.id);
   return (
     <span className={s.onShift}>
       <span className={s.liveDot} data-live={live} /> {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting…' : 'Not live'}
-      {' · '}{profile?.full_name}
       {others.length > 0 && <> · with {others.map((p) => p.name.split(' ')[0]).join(', ')}</>}
-      {' · '}<button type="button" className={s.textButton} onClick={signOut}>Sign out</button>
     </span>
   );
 }

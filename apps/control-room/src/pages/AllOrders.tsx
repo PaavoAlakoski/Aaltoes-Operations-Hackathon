@@ -1,6 +1,6 @@
 // Every order, plain and sortable. For volume and lookup, not for deciding.
 import { useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useStore } from '../data/store';
 import { header, carName } from '../domain/caseView';
 import { STAGE_LABEL } from '../domain/labels';
@@ -21,7 +21,8 @@ const SORT_KEYS: SortKey[] = ['priority', ...COLS.map(([k]) => k)];
 export function AllOrders() {
   const { status, error, retry, world, triage } = useStore();
   const [params, setParams] = useSearchParams();
-  // Links from before the Open and Next deadline columns were removed fall back to the default order.
+  const navigate = useNavigate();
+  // Links to removed sort keys (the old Open and Next deadline columns) fall back to the default order.
   const asked = params.get('sort') as SortKey | null;
   const sort: SortKey = asked && SORT_KEYS.includes(asked) ? asked : 'priority';
   const desc = params.get('dir') === 'desc';
@@ -40,7 +41,7 @@ export function AllOrders() {
 
   const key = (r: (typeof rows)[number]): string | number => {
     switch (sort) {
-      // Default order: most open issues first (not shown as a column), then by stage, delivered and cancelled last.
+      // Default order: most open issues first (shown under Needs action), then by stage, delivered and cancelled last.
       case 'priority': return -r.open * 100 + STAGES.indexOf(r.h.stage);
       case 'reference': return r.h.reference;
       case 'car': return r.car;
@@ -80,7 +81,15 @@ export function AllOrders() {
           </thead>
           <tbody>
             {sorted.map(({ b, h, car }) => (
-              <tr key={b.order.id}>
+              // The whole row opens the order. The reference stays a real link for keyboards and new tabs.
+              <tr
+                key={b.order.id}
+                className={s.clickable}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('a') || window.getSelection()?.toString()) return;
+                  navigate(`/orders/${h.reference}`, { state: { from: '/orders' } });
+                }}
+              >
                 <td data-label="Order"><Link to={`/orders/${h.reference}`} state={{ from: '/orders' }} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
                 <td data-label="Car"><span className={s.car}>{car}</span><span className={s.route}>{h.route}</span></td>
                 <td data-label="Customer" className={s.meta}>{h.customer}</td>

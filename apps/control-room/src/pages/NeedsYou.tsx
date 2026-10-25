@@ -1,11 +1,10 @@
 // Home: only the orders that need a person, ranked by risk and the clock.
 import { useEffect, useMemo, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { useStore } from '../data/store';
-import { GROUP_LABEL, actionLabel } from '../domain/labels';
-import { GROUP_ORDER } from '../domain/attention';
+import { actionLabel } from '../domain/labels';
 import { carName } from '../domain/caseView';
-import { NEEDS_YOU_LIMIT, desks, matchesDesk, type QueueRow } from '../domain/triage';
+import { NEEDS_YOU_LIMIT, type QueueRow } from '../domain/triage';
 import { Page } from '../ui/Page';
 import { Dot, Ref, clockPhrase, deskName, isOverdue, riskTone } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
@@ -20,17 +19,10 @@ const SHIFT_MS = 12 * 3600_000;
 export function NeedsYou() {
   const { status, error, retry, world, triage, decisions, undo } = useStore();
   const ops = useOps();
-  const [params, setParams] = useSearchParams();
-  const desk = params.get('desk');
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Without a desk, only the most urgent few. A desk filter looks through every order that needs a person.
-  const filtering = Boolean(desk);
-  const matching = useMemo(() => {
-    if (!triage) return [];
-    return triage.rows.filter((r) => matchesDesk(r, desk));
-  }, [triage, desk]);
-  const visible = filtering ? matching : matching.slice(0, NEEDS_YOU_LIMIT);
+  // Only the most urgent few; everything else stays under All orders.
+  const visible = useMemo(() => (triage ? triage.rows.slice(0, NEEDS_YOU_LIMIT) : []), [triage]);
 
   // j/k move between rows, Enter opens.
   useEffect(() => {
@@ -51,19 +43,11 @@ export function NeedsYou() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const set = (key: string, value: string | null) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setParams(next, { replace: true });
-  };
-
   if (status === 'error') return <Page title="Needs action" titleHidden><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
 
   const incidents = ops.incidents.filter((i) => i.status !== 'resolved').length;
-  const meta = triage
-    ? `${filtering ? `${visible.length} matching` : `The ${visible.length} most urgent`}${incidents ? ` · ${incidents} open incidents on the road` : ''}`
-    : 'Loading the queue…';
+  // No count line: the tab's badge carries the number. Open road incidents are still worth a line.
+  const meta = incidents ? `${incidents} open incidents on the road` : undefined;
   const now = world?.snapshotAt ?? '';
   const since = Date.now() - SHIFT_MS;
   const shift = decisions.filter((d) => !d.undone_at && Date.parse(d.decided_at) >= since);
@@ -71,43 +55,16 @@ export function NeedsYou() {
   return (
     <Page title="Needs action" titleHidden meta={meta}>
       <LiveNow />
-      <div className={s.tools}>
-        <label className={s.desk}>
-          <span className="visually-hidden">Desk</span>
-          <select value={desk ?? ''} onChange={(e) => set('desk', e.target.value || null)} disabled={!triage}>
-            <option value="">All desks</option>
-            {triage && world && desks(triage).map((d) => <option key={d} value={d}>{deskName(world, d)}</option>)}
-            <option value="unowned">No owner yet</option>
-          </select>
-        </label>
-      </div>
-
       {status === 'loading' || !triage || !world ? (
         <SkeletonRows rows={8} label="Loading the queue" />
       ) : visible.length === 0 ? (
-        desk ? (
-          <Empty title="Nothing for this desk.">
-            <button type="button" className={s.clear} onClick={() => setParams({}, { replace: true })}>Show every desk</button>
-          </Empty>
-        ) : (
-          <Empty title="Nothing needs you right now.">The agents are on the rest. Quiet orders are still listed under All orders.</Empty>
-        )
+        <Empty title="Nothing needs action right now.">The agents are on the rest. Quiet orders are still listed under All orders.</Empty>
       ) : (
+        // One list in urgency order (group, risk, clock); no group headings.
         <div ref={listRef}>
-          {GROUP_ORDER.map((g) => {
-            const rows = visible.filter((r) => r.group === g);
-            if (!rows.length) return null;
-            return (
-              <section key={g} className={s.group} aria-labelledby={`g-${g}`}>
-                <h2 id={`g-${g}`} className={s.groupTitle}>
-                  {GROUP_LABEL[g]} <span className={s.groupCount}>{rows.length}</span>
-                </h2>
-                <ul className={s.rows}>
-                  {rows.map((r) => <Row key={r.orderId} row={r} now={now} />)}
-                </ul>
-              </section>
-            );
-          })}
+          <ul className={s.rows} aria-label="Orders that need action">
+            {visible.map((r) => <Row key={r.orderId} row={r} now={now} />)}
+          </ul>
         </div>
       )}
 
@@ -142,7 +99,7 @@ function Row({ row, now }: { row: QueueRow; now: string }) {
   const { world } = useStore();
   if (!world) return null;
   const clock = clockPhrase(row.clock, now);
-  const more = row.items.length - 1;
+  const open = row.items.length;
   return (
     <li>
       <Link to={`/orders/${row.reference}`} className={s.row} data-row>
@@ -151,7 +108,10 @@ function Row({ row, now }: { row: QueueRow; now: string }) {
           <span className={s.car}>
             <span className={s.carName}>{carName(row.bundle)}</span> <Ref>{row.reference}</Ref>
           </span>
-          <span className={s.reason}>{row.reason}{more > 0 && <span className={s.more}> · {more} more open</span>}</span>
+          <span className={s.reason}>{row.reason}</span>
+        </span>
+        <span className={s.open} aria-label={`${open} open ${open === 1 ? 'item' : 'items'}`}>
+          <span className={s.openNumber}>{open}</span> open
         </span>
         <span className={s.side}>
           {clock && <span className={s.clock} data-overdue={isOverdue(row.clock, now) || undefined}>{clock}</span>}

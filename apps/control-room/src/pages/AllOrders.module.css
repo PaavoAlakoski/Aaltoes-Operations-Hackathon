@@ -36,6 +36,10 @@
   background: var(--hover);
 }
 
+.clickable {
+  cursor: pointer;
+}
+
 .ref {
   text-decoration: none;
 }

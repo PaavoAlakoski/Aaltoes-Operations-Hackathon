@@ -26,7 +26,7 @@ test.afterAll(async ({ request }) => clearLive(request));
 
 test('approve the empty-pickup proposal, see it decided, then undo it', async ({ page, request }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Decide now' })).toBeVisible();
+  await expect(page.locator('a[data-row]').first()).toBeVisible();
   const row = page.getByRole('link', { name: /CD-420593/ });
   await expect(row).toContainText('Driver found no car at pickup');
 
@@ -69,7 +69,7 @@ test('approve the empty-pickup proposal, see it decided, then undo it', async ({
 
 test('the queue works from the keyboard', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Decide now' })).toBeVisible();
+  await expect(page.locator('a[data-row]').first()).toBeVisible();
   await page.keyboard.press('j');
   await expect(page.locator('a[data-row]').first()).toBeFocused();
   await page.keyboard.press('j');

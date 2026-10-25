@@ -26,16 +26,23 @@
   max-width: var(--width-order);
   margin: 0 auto;
   padding: 0 var(--gutter);
-  display: flex;
+  /* Equal side columns keep the tabs centred whatever the account area holds. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
   min-height: 56px;
 }
 
 .nav {
+  grid-column: 2;
   display: flex;
   gap: var(--s1);
   flex-wrap: wrap;
+}
+
+.account {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .link {
@@ -55,6 +62,22 @@
 .active {
   color: var(--text);
   font-weight: var(--weight-bold);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .main {
