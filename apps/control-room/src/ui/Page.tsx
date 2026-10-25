@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import s from './Page.module.css';
 
-export function Page({ title, meta, width = 'list', children, actions, back }: {
+export function Page({ title, titleHidden = false, meta, width = 'list', children, actions, back }: {
   title: ReactNode;
+  /** The header tab already names the page: keep the heading for screen readers only. */
+  titleHidden?: boolean;
   meta?: ReactNode;
   width?: 'list' | 'order';
   actions?: ReactNode;
@@ -17,13 +19,18 @@ export function Page({ title, meta, width = 'list', children, actions, back }: {
   return (
     <div className={s.page} data-width={width}>
       {back && <div className={s.back}>{back}</div>}
-      <header className={s.head}>
-        <div>
-          <h1 className={s.title}>{title}</h1>
-          {meta && <p className={s.meta}>{meta}</p>}
-        </div>
-        {actions && <div className={s.actions}>{actions}</div>}
-      </header>
+      {titleHidden && !meta && !actions ? (
+        // Nothing visible in the header: keep the heading for screen readers without the header's space.
+        <h1 className="visually-hidden">{title}</h1>
+      ) : (
+        <header className={s.head}>
+          <div>
+            <h1 className={titleHidden ? 'visually-hidden' : s.title}>{title}</h1>
+            {meta && <p className={s.meta}>{meta}</p>}
+          </div>
+          {actions && <div className={s.actions}>{actions}</div>}
+        </header>
+      )}
       {children}
     </div>
   );

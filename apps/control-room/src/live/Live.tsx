@@ -1,4 +1,4 @@
-// Live operations, woven into the other screens. Needs you gets "On the road
+// Live operations, woven into the other screens. Needs action gets "On the road
 // now": who is on shift, the KPI strip and the incident queue. Each
 // order page gets its car: where it is, its incidents, the agent's proposal
 // and the conversation with the driver. Staff only; drivers use the driver app.
@@ -32,7 +32,7 @@ function orderPath(vehicle: Vehicle | undefined, incidentId?: string): string | 
   return `/orders/${vehicle.order_ref}${incidentId ? `?incident=${incidentId}` : ''}`;
 }
 
-// ---------------------------------------------------------------- Needs you
+// ---------------------------------------------------------------- Needs action
 
 export function LiveNow() {
   const ops = useOps();

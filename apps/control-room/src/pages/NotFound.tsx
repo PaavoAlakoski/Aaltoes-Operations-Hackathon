@@ -6,7 +6,7 @@ export function NotFound() {
   return (
     <Page title="Not here">
       <Empty title="There is no page at this address.">
-        <Link to="/">Back to Needs you</Link>
+        <Link to="/">Back to Needs action</Link>
       </Empty>
     </Page>
   );
@@ -19,7 +19,7 @@ export function Crashed() {
     <div style={{ padding: '48px 16px' }}>
       <Page title="Something broke">
         <Empty title="This screen hit an error. Nothing you decided was lost.">
-          <a href="/">Back to Needs you</a>
+          <a href="/">Back to Needs action</a>
           <br />
           <span style={{ fontSize: 'var(--size-meta)' }}>{error instanceof Error ? error.message : String(error)}</span>
         </Empty>

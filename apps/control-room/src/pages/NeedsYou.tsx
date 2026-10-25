@@ -1,11 +1,11 @@
 // Home: only the orders that need a person, ranked by risk and the clock.
 import { useEffect, useMemo, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useStore } from '../data/store';
 import { GROUP_LABEL, actionLabel } from '../domain/labels';
 import { GROUP_ORDER } from '../domain/attention';
 import { carName } from '../domain/caseView';
-import { NEEDS_YOU_LIMIT, desks, matchesDesk, matchesSearch, type QueueRow } from '../domain/triage';
+import { NEEDS_YOU_LIMIT, desks, matchesDesk, type QueueRow } from '../domain/triage';
 import { Page } from '../ui/Page';
 import { Dot, Ref, clockPhrase, deskName, isOverdue, riskTone } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
@@ -21,32 +21,22 @@ export function NeedsYou() {
   const { status, error, retry, world, triage, decisions, undo } = useStore();
   const ops = useOps();
   const [params, setParams] = useSearchParams();
-  const q = params.get('q') ?? '';
   const desk = params.get('desk');
-  const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
-  // Without a search, only the most urgent few. A search or desk filter looks through every order
-  // that needs a person, so nothing past the limit becomes unfindable.
-  const filtering = Boolean(q || desk);
+  // Without a desk, only the most urgent few. A desk filter looks through every order that needs a person.
+  const filtering = Boolean(desk);
   const matching = useMemo(() => {
-    if (!triage || !world) return [];
-    return triage.rows.filter((r) => matchesDesk(r, desk) && matchesSearch(r, q, world));
-  }, [triage, world, desk, q]);
+    if (!triage) return [];
+    return triage.rows.filter((r) => matchesDesk(r, desk));
+  }, [triage, desk]);
   const visible = filtering ? matching : matching.slice(0, NEEDS_YOU_LIMIT);
-  const hidden = matching.length - visible.length;
 
-  // j/k move between rows, Enter opens, / searches.
+  // j/k move between rows, Enter opens.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement;
       const typing = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
-      if (e.key === '/' && !typing) {
-        e.preventDefault();
-        searchRef.current?.focus();
-        return;
-      }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== 'j' && e.key !== 'k') return;
       const links = [...(listRef.current?.querySelectorAll<HTMLAnchorElement>('a[data-row]') ?? [])];
@@ -68,7 +58,7 @@ export function NeedsYou() {
     setParams(next, { replace: true });
   };
 
-  if (status === 'error') return <Page title="Needs you"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
+  if (status === 'error') return <Page title="Needs action" titleHidden><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
 
   const incidents = ops.incidents.filter((i) => i.status !== 'resolved').length;
   const meta = triage
@@ -79,18 +69,9 @@ export function NeedsYou() {
   const shift = decisions.filter((d) => !d.undone_at && Date.parse(d.decided_at) >= since);
 
   return (
-    <Page title="Needs you" meta={meta}>
+    <Page title="Needs action" titleHidden meta={meta}>
       <LiveNow />
-      <div className={s.tools} role="search">
-        <label className={s.search}>
-          <Icon name="search" />
-          <span className="visually-hidden">Search orders</span>
-          <input
-            ref={searchRef} type="search" placeholder="Search car, reference or customer" value={q}
-            onChange={(e) => set('q', e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') (e.target as HTMLInputElement).blur(); if (e.key === 'Enter' && visible[0]) navigate(`/orders/${visible[0].reference}`); }}
-          />
-        </label>
+      <div className={s.tools}>
         <label className={s.desk}>
           <span className="visually-hidden">Desk</span>
           <select value={desk ?? ''} onChange={(e) => set('desk', e.target.value || null)} disabled={!triage}>
@@ -104,9 +85,9 @@ export function NeedsYou() {
       {status === 'loading' || !triage || !world ? (
         <SkeletonRows rows={8} label="Loading the queue" />
       ) : visible.length === 0 ? (
-        q || desk ? (
-          <Empty title="Nothing matches.">
-            <button type="button" className={s.clear} onClick={() => setParams({}, { replace: true })}>Clear the search and desk</button>
+        desk ? (
+          <Empty title="Nothing for this desk.">
+            <button type="button" className={s.clear} onClick={() => setParams({}, { replace: true })}>Show every desk</button>
           </Empty>
         ) : (
           <Empty title="Nothing needs you right now.">The agents are on the rest. Quiet orders are still listed under All orders.</Empty>
@@ -127,12 +108,6 @@ export function NeedsYou() {
               </section>
             );
           })}
-          {hidden > 0 && (
-            <p className={s.overflow}>
-              {hidden} more {hidden === 1 ? 'order needs' : 'orders need'} a person later.{' '}
-              <Link to="/orders">See them under All orders</Link>
-            </p>
-          )}
         </div>
       )}
 

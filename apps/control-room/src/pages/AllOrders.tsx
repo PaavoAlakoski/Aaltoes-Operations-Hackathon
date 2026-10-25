@@ -7,22 +7,24 @@ import { STAGE_LABEL } from '../domain/labels';
 import type { Stage } from '../domain/evidence';
 import { isOpen } from '../domain/attention';
 import { Page } from '../ui/Page';
-import { Ref, clockPhrase } from '../ui/bits';
+import { Ref } from '../ui/bits';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import s from './AllOrders.module.css';
 
-type SortKey = 'priority' | 'reference' | 'car' | 'customer' | 'stage' | 'open' | 'clock';
+type SortKey = 'priority' | 'reference' | 'car' | 'customer' | 'stage';
 const STAGES = Object.keys(STAGE_LABEL) as Stage[];
 const COLS: [SortKey, string][] = [
-  ['reference', 'Order'], ['car', 'Car'], ['customer', 'Customer'], ['stage', 'Stage'], ['open', 'Open'], ['clock', 'Next deadline'],
+  ['reference', 'Order'], ['car', 'Car'], ['customer', 'Customer'], ['stage', 'Stage'],
 ];
+const SORT_KEYS: SortKey[] = ['priority', ...COLS.map(([k]) => k)];
 
 export function AllOrders() {
   const { status, error, retry, world, triage } = useStore();
   const [params, setParams] = useSearchParams();
-  const sort = (params.get('sort') as SortKey | null) ?? 'priority';
+  // Links from before the Open and Next deadline columns were removed fall back to the default order.
+  const asked = params.get('sort') as SortKey | null;
+  const sort: SortKey = asked && SORT_KEYS.includes(asked) ? asked : 'priority';
   const desc = params.get('dir') === 'desc';
-  const stage = params.get('stage') as Stage | null;
 
   const rows = useMemo(() => {
     if (!world || !triage) return [];
@@ -33,28 +35,24 @@ export function AllOrders() {
     });
   }, [world, triage]);
 
-  if (status === 'error') return <Page title="All orders"><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
-  if (status === 'loading' || !world) return <Page title="All orders"><SkeletonRows rows={10} /></Page>;
+  if (status === 'error') return <Page title="All orders" titleHidden><ErrorState message={error ?? ''} onRetry={retry} /></Page>;
+  if (status === 'loading' || !world) return <Page title="All orders" titleHidden><SkeletonRows rows={10} /></Page>;
 
-  const filtered = rows.filter((r) => !stage || r.h.stage === stage);
   const key = (r: (typeof rows)[number]): string | number => {
     switch (sort) {
-      // Most open issues first, then by stage, delivered and cancelled last.
+      // Default order: most open issues first (not shown as a column), then by stage, delivered and cancelled last.
       case 'priority': return -r.open * 100 + STAGES.indexOf(r.h.stage);
       case 'reference': return r.h.reference;
       case 'car': return r.car;
       case 'customer': return r.h.customer;
       case 'stage': return STAGES.indexOf(r.h.stage);
-      case 'open': return r.open;
-      case 'clock': return r.h.deciding ? Date.parse(r.h.deciding.at) : Number.MAX_SAFE_INTEGER;
     }
   };
-  const sorted = filtered.slice().sort((a, b) => {
+  const sorted = rows.slice().sort((a, b) => {
     const ka = key(a), kb = key(b);
     const c = typeof ka === 'number' && typeof kb === 'number' ? ka - kb : String(ka).localeCompare(String(kb));
     return desc ? -c : c;
   });
-  const counts = Object.fromEntries(STAGES.map((st) => [st, rows.filter((r) => r.h.stage === st).length]));
 
   const setSort = (k: SortKey) => {
     const next = new URLSearchParams(params);
@@ -64,25 +62,9 @@ export function AllOrders() {
   };
 
   return (
-    <Page
-      title="All orders"
-      meta={`${rows.length} orders in the snapshot`}
-      actions={
-        <label>
-          <span className="visually-hidden">Stage</span>
-          <select className={s.select} value={stage ?? ''} onChange={(e) => {
-            const next = new URLSearchParams(params);
-            if (e.target.value) next.set('stage', e.target.value); else next.delete('stage');
-            setParams(next, { replace: true });
-          }}>
-            <option value="">Every stage</option>
-            {STAGES.map((st) => <option key={st} value={st}>{STAGE_LABEL[st]} ({counts[st]})</option>)}
-          </select>
-        </label>
-      }
-    >
+    <Page title="All orders" titleHidden>
       {sorted.length === 0 ? (
-        <Empty title="No orders at this stage." />
+        <Empty title="No orders in the snapshot." />
       ) : (
         <table className={s.table}>
           <thead>
@@ -97,14 +79,12 @@ export function AllOrders() {
             </tr>
           </thead>
           <tbody>
-            {sorted.map(({ b, h, car, open }) => (
+            {sorted.map(({ b, h, car }) => (
               <tr key={b.order.id}>
                 <td data-label="Order"><Link to={`/orders/${h.reference}`} state={{ from: '/orders' }} className={s.ref}><Ref>{h.reference}</Ref></Link></td>
                 <td data-label="Car"><span className={s.car}>{car}</span><span className={s.route}>{h.route}</span></td>
                 <td data-label="Customer" className={s.meta}>{h.customer}</td>
                 <td data-label="Stage">{h.stageLabel}</td>
-                <td data-label="Open" className={s.num}>{open || <span className={s.meta}>none</span>}</td>
-                <td data-label="Next deadline" className={s.meta}>{clockPhrase(h.deciding, world.snapshotAt) ?? '–'}</td>
               </tr>
             ))}
           </tbody>

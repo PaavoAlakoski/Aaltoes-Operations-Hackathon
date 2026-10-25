@@ -1,4 +1,4 @@
-/* Live operations inside Needs you and the order page. Brand tokens only; colour still means status. */
+/* Live operations inside Needs action and the order page. Brand tokens only; colour still means status. */
 
 /* The live blocks */
 .now { margin-bottom: var(--s6); padding-bottom: var(--s5); border-bottom: 1px solid var(--line); }
@@ -82,7 +82,7 @@ textarea.input { width: 100%; resize: vertical; }
 
 /* Map and queue */
 .grid { display: grid; gap: var(--s4); grid-template-columns: 1fr; margin-bottom: var(--s5); }
-/* Needs you no longer shows the map; the incident queue takes the full width. */
+/* Needs action no longer shows the map; the incident queue takes the full width. */
 .map { height: 420px; border-radius: var(--radius); border: 1px solid var(--line); z-index: 0; }
 .queue { min-width: 0; display: flex; flex-direction: column; max-height: 420px; }
 .queueHead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); margin-bottom: var(--s2); }

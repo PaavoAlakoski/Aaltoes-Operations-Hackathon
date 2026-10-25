@@ -107,7 +107,7 @@ You need Node 20 or newer and a Supabase project (the free tier is fine).
 
 ## Screens
 
-- **Needs you** (`/`): Decide now, Follow up, Waiting on others. Search, desk filter,
+- **Needs action** (`/`): Decide now, Follow up, Waiting on others. Search, desk filter,
   `j`/`k`/`Enter` and `/`. Quiet orders collapse to one sentence. *Decided this shift* has undo.
 - **Order** (`/orders/CD-420593`): one lead decision in full, every other open item folded to a
   line, facts with certainty and source, a timeline filterable by who, and every raw record

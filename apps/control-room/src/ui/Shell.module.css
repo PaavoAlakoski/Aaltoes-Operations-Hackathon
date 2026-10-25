@@ -57,13 +57,6 @@
   font-weight: var(--weight-bold);
 }
 
-.count {
-  font-size: var(--size-meta);
-  font-weight: var(--weight-regular);
-  color: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-}
-
 .main {
   padding: var(--s6) var(--gutter) var(--s8);
 }

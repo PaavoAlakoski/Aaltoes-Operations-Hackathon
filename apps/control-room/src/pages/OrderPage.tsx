@@ -21,14 +21,14 @@ import { OrderLive } from '../live/Live';
 import s from './OrderPage.module.css';
 
 // The lists that link here say so in the link's state, so "back" returns to
-// the list the person came from. A direct visit goes back to Needs you.
+// the list the person came from. A direct visit goes back to Needs action.
 const BACK: Record<string, string> = { '/orders': 'All orders', '/inbox': 'Inbox' };
 
 function useBack() {
   const state: unknown = useLocation().state;
   const from = typeof state === 'object' && state !== null && 'from' in state ? String(state.from) : '';
   const to = from in BACK ? from : '/';
-  return <Link to={to} className={s.back}><Icon name="back" /> {BACK[to] ?? 'Needs you'}</Link>;
+  return <Link to={to} className={s.back}><Icon name="back" /> {BACK[to] ?? 'Needs action'}</Link>;
 }
 
 export function OrderPage() {

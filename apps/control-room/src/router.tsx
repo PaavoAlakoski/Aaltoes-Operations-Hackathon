@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
       { path: '/orders/:ref', element: <OrderPage /> },
       { path: '/inbox', element: <Inbox /> },
       { path: '/agents', element: <Agents /> },
-      // Live operations now sit inside Needs you and each order; old links still land.
+      // Live operations now sit inside Needs action and each order; old links still land.
       { path: '/live', element: <Navigate to="/" replace /> },
       { path: '*', element: <NotFound /> },
     ],
