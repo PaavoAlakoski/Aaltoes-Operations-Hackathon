@@ -34,6 +34,23 @@
   min-height: 56px;
 }
 
+/* The Bahn Express wordmark, in the brand's title font. */
+.logo {
+  grid-column: 1;
+  justify-self: start;
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--bar-text-active);
+}
+.logoSub {
+  color: var(--bar-text);
+}
+
 .nav {
   grid-column: 2;
   display: flex;
@@ -105,6 +122,21 @@
     padding: var(--s2);
     gap: var(--s1);
     white-space: nowrap;
+  }
+  /* On a phone the wordmark gets its own row above the tabs. */
+  .barInner {
+    grid-template-columns: 1fr auto;
+  }
+  .logo {
+    font-size: 20px;
+  }
+  .nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .account {
+    grid-column: 2;
+    grid-row: 1;
   }
   .main {
     padding-top: var(--s5);
