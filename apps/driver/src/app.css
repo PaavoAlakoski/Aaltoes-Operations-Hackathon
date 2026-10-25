@@ -1,39 +1,46 @@
-/* Driver app: phone first, thumbs, sunlight. Quiet neutrals, one accent (the
-   brand red) for what needs the driver now, and a dark theme for night drives. */
+/* Driver app: phone first, thumbs, sunlight. The control room's slate palette
+   (control-room/src/styles/tokens.css): slate surfaces, blue for actions and
+   progress, red only for what needs the driver now; a dark theme for night drives. */
 :root {
-  --bg: #f6f6f3;
+  --bg: #f8fafc;             /* slate-50 */
   --surface: #ffffff;
-  --text: #121210;
-  --meta: #6f6c66;
-  --line: rgba(18, 18, 16, 0.09);
-  --soft: rgba(18, 18, 16, 0.05);
-  --accent: #b42c42;
-  --accent-soft: rgba(180, 44, 66, 0.1);
-  --ok: #1b7a52;
-  --ok-soft: rgba(27, 122, 82, 0.1);
-  --warn: #b04617;
-  --warn-soft: rgba(176, 70, 23, 0.12);
+  --text: #1e293b;           /* slate-800 */
+  --meta: #475569;           /* slate-600 */
+  --line: #e2e8f0;           /* slate-200 */
+  --soft: rgba(15, 23, 42, 0.04);
+  --accent: #dc2626;         /* red-600 */
+  --accent-soft: #fee2e2;    /* red-100 */
+  --ok: #047857;             /* emerald-700 */
+  --ok-soft: rgba(16, 185, 129, 0.12);
+  --warn: #92400e;           /* amber-800 on amber-100, the control room's action badge */
+  --warn-soft: #fef3c7;
+  --strong: #1d4ed8;         /* blue-700: primary actions */
   --on-strong: #ffffff;
-  --strong: #121210;
+  --focus: #1d4ed8;
+  /* Deep blue top bar (blue-950) with light text, as in the control room */
+  --bar-bg: #172554;
+  --bar-text: #e2e8f0;
+  --bar-text-active: #ffffff;
   --radius: 16px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d0d0c;
-    --surface: #171715;
-    --text: #f2f1ed;
-    --meta: #9b978e;
-    --line: rgba(242, 241, 237, 0.09);
-    --soft: rgba(242, 241, 237, 0.06);
-    --accent: #f0677d;
-    --accent-soft: rgba(240, 103, 125, 0.14);
-    --ok: #4cc28d;
-    --ok-soft: rgba(76, 194, 141, 0.14);
-    --warn: #f08a5d;
-    --warn-soft: rgba(240, 138, 93, 0.15);
-    --on-strong: #121210;
-    --strong: #f2f1ed;
+    --bg: #020617;           /* slate-950 */
+    --surface: #0f172a;      /* slate-900 */
+    --text: #f1f5f9;         /* slate-100 */
+    --meta: #94a3b8;         /* slate-400 */
+    --line: #1e293b;         /* slate-800 */
+    --soft: rgba(241, 245, 249, 0.06);
+    --accent: #f87171;       /* red-400 */
+    --accent-soft: rgba(248, 113, 113, 0.15);
+    --ok: #34d399;           /* emerald-400 */
+    --ok-soft: rgba(52, 211, 153, 0.14);
+    --warn: #fbbf24;         /* amber-400 */
+    --warn-soft: rgba(251, 191, 36, 0.15);
+    --strong: #2563eb;       /* blue-600: white text stays 5:1 */
+    --on-strong: #ffffff;
+    --focus: #60a5fa;        /* blue-400 */
     color-scheme: dark;
   }
 }
@@ -52,17 +59,18 @@ h1, h2, p, ol, ul, dl, dd { margin: 0; }
 ol, ul { padding: 0; list-style: none; }
 button, input, textarea { font: inherit; color: inherit; }
 a { color: inherit; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .app { max-width: 560px; margin: 0 auto; min-height: 100vh; }
 .bar {
   position: sticky; top: 0; z-index: 3;
   display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 20px; background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: 14px 20px; background: var(--bar-bg); color: var(--bar-text);
 }
-.brand { font-weight: 650; letter-spacing: -0.01em; }
-.sub { font-weight: 400; color: var(--meta); }
+.brand { font-weight: 650; letter-spacing: -0.01em; color: var(--bar-text-active); }
+.sub { font-weight: 400; color: var(--bar-text); }
+.bar .link { color: var(--bar-text); }
+.bar :focus-visible { outline-color: var(--bar-text-active); }
 .main { padding: 8px 16px calc(104px + env(safe-area-inset-bottom)); display: grid; gap: 20px; }
 .hello { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; padding: 0 4px; }
 
@@ -87,7 +95,7 @@ input, textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--soft);
   padding: 12px 14px; min-height: 48px; color: var(--text); font-size: 16px;
 }
-input:focus, textarea:focus { border-color: var(--accent); outline: none; }
+input:focus, textarea:focus { border-color: var(--focus); outline: none; }
 
 .primary, .ghost, .segmented button { cursor: pointer; border-radius: 12px; font-weight: 600; }
 .primary {
@@ -143,7 +151,7 @@ a.primary, a.ghost { display: inline-flex; align-items: center; justify-content:
 .summary { display: grid; gap: 4px; }
 .summary .row { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
 .meter { height: 4px; border-radius: 2px; background: var(--soft); overflow: hidden; margin-top: 14px; }
-.meter > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.meter > span { display: block; height: 100%; background: var(--strong); border-radius: 2px; }
 
 .timeline { display: grid; position: relative; }
 .leg { display: grid; grid-template-columns: 28px 1fr; gap: 0 12px; position: relative; padding-bottom: 18px; }
@@ -158,7 +166,7 @@ a.primary, a.ghost { display: inline-flex; align-items: center; justify-content:
   border: 2px solid var(--line); background: var(--bg); color: var(--meta); font-size: 13px; z-index: 1;
 }
 .leg[data-status='done'] .dot { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
-.leg[data-status='now'] .dot { border-color: var(--accent); background: var(--accent); color: #fff; }
+.leg[data-status='now'] .dot { border-color: var(--strong); background: var(--strong); color: var(--on-strong); }
 .leg-body { min-width: 0; }
 .leg-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-height: 28px; }
 .leg-title { font-weight: 600; line-height: 1.3; }
