@@ -3,7 +3,7 @@
 // order page gets its car: where it is, its incidents, the agent's proposal
 // and the conversation with the driver. Staff only; drivers use the driver app.
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { delayPhrase, type Incident, type Vehicle } from '@bahn/shared';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { ProposalCard } from './ProposalCard';
@@ -126,8 +126,6 @@ export function Account() {
 function Room() {
   const ops = useOps();
   const { incidents, vehicles, proposals } = ops;
-  const navigate = useNavigate();
-  const [simErr, setSimErr] = useState<string | null>(null);
 
   const open = incidents.filter((i) => i.status !== 'resolved');
   // Only open incidents: a resolved one needs nobody, and its order page keeps the history.
@@ -137,28 +135,6 @@ function Room() {
     for (const p of proposals) m.set(p.incidentId, (m.get(p.incidentId) ?? 0) + p.moves.filter((x) => x.status === 'pending').length);
     return m;
   }, [proposals]);
-
-  async function simulate() {
-    setSimErr(null);
-    try {
-      const row = await ops.simulateFerryJam();
-      const to = orderPath(ops.vehicles.get(row.vehicle_id), row.id);
-      if (to) navigate(to);
-    } catch (e) {
-      setSimErr(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // No incident yet: pickup-watch raises it once it sees the driver will be late.
-  async function simulateTrain() {
-    setSimErr(null);
-    try {
-      const { order_ref } = await ops.simulateTrainDelay();
-      if (order_ref) navigate(`/orders/${order_ref}`);
-    } catch (e) {
-      setSimErr(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   return (
     <>
@@ -176,65 +152,9 @@ function Room() {
               ))}
             </ul>
           )}
-          <div className={s.queueFoot}>
-            <button type="button" className={s.simulate} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
-              Simulate ferry traffic jam
-            </button>
-            <button type="button" className={s.simulate} onClick={simulateTrain} title="Stage the Munich pickup: the driver's ICE is 3 h late and the dealer hands keys over in person only">
-              Simulate train delay
-            </button>
-            <ResetDemo />
-          </div>
-          {simErr && <p className={s.error} role="alert">{simErr}</p>}
         </section>
       </div>
     </>
-  );
-}
-
-/** Puts the demo back to its starting point, after a second click. */
-function ResetDemo() {
-  const { resetDemo } = useOps();
-  const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function run() {
-    setBusy(true);
-    setErr(null);
-    try {
-      const n = await resetDemo();
-      setDone(`Demo reset: removed ${n.messages} messages, ${n.chat} chat messages, ${n.incidents} incidents and ${n.suggestions} agent proposals.`);
-      setAsking(false);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!asking) {
-    return (
-      <>
-        <button type="button" className={s.danger} onClick={() => { setAsking(true); setDone(null); }}>
-          Reset demo
-        </button>
-        {done && <p className={s.meta} role="status">{done}</p>}
-      </>
-    );
-  }
-  return (
-    <div className={s.confirm} role="alertdialog" aria-label="Reset demo">
-      <p>Put the demo back to its starting point for everyone? Every message, chat and report sent while testing goes, with the agent's replies, proposals and bookings. Cars, drivers, travel plans and routes return to the original data. This can't be undone.</p>
-      <div className={s.inline}>
-        <button type="button" className={s.dangerSolid} onClick={() => void run()} disabled={busy}>
-          {busy ? 'Resetting…' : 'Reset everything'}
-        </button>
-        <button type="button" className={s.textButton} onClick={() => setAsking(false)} disabled={busy}>Cancel</button>
-      </div>
-      {err && <p className={s.error} role="alert">{err}</p>}
-    </div>
   );
 }
 

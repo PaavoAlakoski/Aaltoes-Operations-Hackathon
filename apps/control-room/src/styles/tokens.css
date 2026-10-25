@@ -37,8 +37,6 @@
   --action-badge-bg: rgba(176, 70, 23, 0.1);
   --action-badge-text: var(--orange-ink);
   --row-hover: var(--hover);
-  --sim-bg: var(--asphalt);
-  --sim-bg-hover: var(--asphalt);
   --text: var(--asphalt);
   --text-meta: var(--warm-grey);
   --line: var(--sand-light);
@@ -118,8 +116,6 @@
   --action-badge-bg: #fef3c7;        /* amber-100 */
   --action-badge-text: #92400e;      /* amber-800 */
   --row-hover: #f8fafc;              /* slate-50 */
-  --sim-bg: #2563eb;                 /* blue-600: demo simulation buttons */
-  --sim-bg-hover: #1d4ed8;           /* blue-700 */
 }
 
 @media (min-width: 720px) {
