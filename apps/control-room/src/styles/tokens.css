@@ -12,9 +12,14 @@
   --orange: #b04617;
   --teal: #1f6f7b;
   --green: #1b7a52;
+  /* Status colour for text, and for fills that carry white text. In the Bahn palette the same hue. */
+  --orange-ink: var(--orange);
+  --green-ink: var(--green);
 
   /* Roles */
   --bg: var(--birch);
+  /* Cards on the page: the lead decision and popovers. Same as the page in the Bahn theme. */
+  --card: var(--bg);
   --text: var(--asphalt);
   --text-meta: var(--warm-grey);
   --line: var(--sand-light);
@@ -57,6 +62,27 @@
   --fast: 120ms;
 
   color-scheme: light;
+}
+
+/* The default theme: slate surfaces, blue primary actions, amber and emerald status.
+   ?theme=bahn shows the original warm palette, ?theme=slate comes back (remembered in this browser). */
+:root[data-theme='slate'] {
+  --birch: #ffffff;          /* text on filled buttons */
+  --asphalt: #1d4ed8;        /* primary actions (bahn.blue) */
+  --orange: #f59e0b;         /* waiting / delay (alert.warning) */
+  --green: #10b981;          /* approved (alert.success) */
+  --orange-ink: #b45309;     /* amber-700: amber-500 is 2.1:1 as text on white, this is 5.0:1 */
+  --green-ink: #047857;      /* emerald-700: emerald-500 is 2.5:1, this is 5.5:1 */
+  --bg: #f8fafc;             /* control room background (surface.light) */
+  --card: #ffffff;           /* cards (surface.card) */
+  --text: #1e293b;           /* headings and text (text.primary) */
+  --text-meta: #475569;      /* secondary text (text.secondary) */
+  --line: #e2e8f0;           /* not in the theme: slate-200 */
+  --line-strong: #cbd5e1;    /* not in the theme: slate-300 */
+  --focus: #1d4ed8;
+  --hover: rgba(15, 23, 42, 0.04);
+  --selected: rgba(29, 78, 216, 0.08);
+  --shadow-lift: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.07);
 }
 
 @media (min-width: 720px) {

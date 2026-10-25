@@ -55,7 +55,7 @@
   padding: var(--s5);
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--bg);
+  background: var(--card);
   box-shadow: var(--shadow-lift);
   display: flex;
   flex-direction: column;

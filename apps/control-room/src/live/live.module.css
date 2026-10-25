@@ -28,8 +28,8 @@
 .h3 { font-size: var(--size-body); font-weight: var(--weight-bold); margin-bottom: var(--s2); }
 .meta { font-size: var(--size-meta); color: var(--text-meta); }
 .error { font-size: var(--size-meta); color: var(--red); margin-top: var(--s2); }
-.ok { color: var(--green); font-weight: var(--weight-bold); }
-.attention { color: var(--orange); font-weight: var(--weight-bold); }
+.ok { color: var(--green-ink); font-weight: var(--weight-bold); }
+.attention { color: var(--orange-ink); font-weight: var(--weight-bold); }
 .eyebrow { font-size: var(--size-meta); color: var(--text-meta); font-weight: var(--weight-bold); }
 
 .input {
@@ -70,7 +70,7 @@ textarea.input { width: 100%; resize: vertical; }
 .accountPanel {
   position: absolute; top: calc(100% + 14px); right: 0; z-index: 20; width: min(320px, calc(100vw - 32px));
   display: grid; gap: var(--s3); padding: var(--s4); white-space: normal;
-  background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-lift);
 }
 .accountFields { display: grid; gap: var(--s3); }
 .field { display: grid; gap: var(--s1); font-size: var(--size-meta); color: var(--text-meta); }
@@ -128,7 +128,7 @@ a.row:hover { background: var(--hover); }
   flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   font-size: var(--size-meta); font-weight: var(--weight-bold); box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.move[data-status='executed'] .step { background: var(--green); color: var(--birch); box-shadow: none; }
+.move[data-status='executed'] .step { background: var(--green-ink); color: var(--birch); box-shadow: none; }
 .move[data-status='failed'] .step { background: var(--red); color: var(--birch); box-shadow: none; }
 .moveBody { display: grid; gap: var(--s1); min-width: 0; flex: 1; }
 .moveTitle { display: flex; justify-content: space-between; gap: var(--s3); font-weight: var(--weight-bold); }
@@ -145,7 +145,7 @@ a.row:hover { background: var(--hover); }
   margin-bottom: var(--s4); padding: var(--s4) var(--s5); border-radius: var(--radius);
   border: 2px solid var(--line-strong); background: var(--hover);
 }
-.inTime[data-state='in'] { border-color: var(--green); background: var(--green); color: var(--birch); }
+.inTime[data-state='in'] { border-color: var(--green-ink); background: var(--green-ink); color: var(--birch); }
 .inTime[data-state='late'] { border-color: var(--red); background: var(--red); color: var(--birch); }
 .inTimeWord {
   font-family: var(--font-title); font-weight: var(--weight-bold); line-height: 1.1;
@@ -159,7 +159,7 @@ a.row:hover { background: var(--hover); }
   display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--size-meta);
   font-weight: var(--weight-bold); color: var(--birch); background: var(--warm-grey);
 }
-.inTimePill[data-state='in'] { background: var(--green); }
+.inTimePill[data-state='in'] { background: var(--green-ink); }
 .inTimePill[data-state='late'] { background: var(--red); }
 
 /* The double recovery: the car on one side, the stranded driver on the other. */
