@@ -2,9 +2,10 @@
 // Reads the situation through the agent_* SQL functions, lets Claude (through
 // OpenRouter) look up what it needs, and stores its proposal as moves in
 // agent_suggestions for a person to approve one by one. It never carries
-// anything out itself. One exception: notify_driver sends a message at once.
-// It only informs the driver ("you will not make the pickup"); it changes
-// nothing.
+// anything out itself. Two exceptions act at once: notify_driver sends the
+// driver a message ("you will not make the pickup"), and set_car_status
+// records what the car is doing (stopped, needs a check). Nothing is ever
+// escalated to a supervisor.
 //
 // Any failure (no key, the API down, a refusal, a malformed proposal) is
 // written to audit_log and the incident simply has no suggestion; nothing
@@ -23,8 +24,9 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 
 const SYSTEM = `You are the helper agent in Bahn's delivery control room. Bahn's freelance drivers drive used cars
 one at a time across Finland, Denmark and Germany, often via a ferry. When something goes wrong with a car, you
-look into it and propose what control should do. A dispatcher approves or rejects each move you propose; you never
-act yourself, and nothing you propose happens unless a person approves it.
+look into it and propose what control should do. A dispatcher approves or rejects each move you propose. Only two
+things you do yourself, at once: notify_driver and set_car_status. You never escalate to a supervisor; you handle
+it.
 
 Work like this:
 - Start from the incident context you are given. Use the tools to check what you need; do not guess times, prices,
@@ -44,8 +46,12 @@ Work like this:
      suitable hotel. Then call find_market_jobs_near the same point with after = tomorrow 06:00 local, and propose
      offer_market_job for the best job (nearest, sensible window). Three moves, in that order.
   4. If the keys can be collected late (key box), propose only a message_vehicle saying what to do.
+- If the incident means the car's status is wrong, call set_car_status yourself before proposing anything: stopped
+  when the car is not moving (breakdown, accident, waiting on the roadside), needs_check when it must be inspected
+  before driving on (damage, warning lights), moving when it is back on the road. Do not propose it as a move.
 - Otherwise propose the smallest set of moves that helps: usually one message to the driver, sometimes a corridor
-  message, a status change, or escalation to a supervisor for anything safety-related (accident, damage).
+  message. For anything safety-related (accident, damage) set the status and tell the driver what to do; never
+  escalate.
 - Finish by calling submit_proposal exactly once.
 
 Writing:
@@ -63,6 +69,9 @@ type ChatMessage =
   | { role: "system" | "user"; content: string }
   | { role: "assistant"; content: string | null; tool_calls?: ToolCall[]; [extra: string]: unknown }
   | { role: "tool"; tool_call_id: string; content: string };
+
+/** The statuses the agent may set on its own. */
+const CAR_STATUSES = ["stopped", "needs_check", "moving", "offline"];
 
 const tools: ToolDef[] = [
   {
@@ -140,6 +149,18 @@ const tools: ToolDef[] = [
     },
   },
   {
+    name: "set_car_status",
+    description:
+      "Set the car's status right away, without waiting for control: stopped (not moving), needs_check (inspect before driving on), moving (back on the road), offline (no contact).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: { status: { type: "string", enum: CAR_STATUSES } },
+      required: ["status"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "find_replacement_driver",
     description:
       "Free drivers near the car's pickup dealer with their Google drive time to it, arrival time and whether they make the key handover before closing. Fastest first.",
@@ -195,8 +216,8 @@ const tools: ToolDef[] = [
               type: {
                 type: "string",
                 enum: [
-                  "rebook_ferry", "book_hotel", "message_vehicle", "message_corridor", "set_vehicle_status", "escalate_incident",
-                  "reassign_driver", "book_stay", "offer_market_job",
+                  "rebook_ferry", "book_hotel", "message_vehicle", "message_corridor", "reassign_driver", "book_stay",
+                  "offer_market_job",
                 ],
               },
               title: { type: "string" },
@@ -211,15 +232,9 @@ const tools: ToolDef[] = [
               place_id: { type: ["string", "null"], description: "book_stay: from find_stay_near." },
               job_id: { type: ["string", "null"], description: "offer_market_job: from find_market_jobs_near." },
               nights: { type: ["integer", "null"] },
-              status: {
-                type: ["string", "null"],
-                enum: ["waiting_pickup", "moving", "stopped", "on_ferry", "needs_check", "delivered", "offline", null],
-              },
-              severity: { type: ["string", "null"], enum: ["low", "medium", "high", "critical", null] },
             },
             required: [
-              "type", "title", "rationale", "message", "departure_id", "hotel_id", "driver_id", "place_id", "job_id",
-              "nights", "status", "severity",
+              "type", "title", "rationale", "message", "departure_id", "hotel_id", "driver_id", "place_id", "job_id", "nights",
             ],
             additionalProperties: false,
           },
@@ -242,8 +257,6 @@ type Move = {
   place_id: string | null;
   job_id: string | null;
   nights: number | null;
-  status: string | null;
-  severity: string | null;
 };
 // "checks" is stored as reasoning_trace. The model is asked for the facts it
 // checked, never for its "reasoning": with that wording in the schema every
@@ -262,6 +275,8 @@ type Seen = {
   /** The car's driver when the agent first looked: the one a stay or a job is for. */
   strandedDriverId: string | null;
   notified: boolean;
+  /** The status set_car_status put on the car this run, if any. */
+  statusSet: string | null;
 };
 
 /** What this run is about, for the tools that act on "the car". */
@@ -295,6 +310,14 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
       seen.notified = true;
       await audit("agent.notify", { incident_id: run.incidentId, vehicle_id: run.vehicleId, body });
       return { sent: true };
+    }
+    case "set_car_status": {
+      if (!CAR_STATUSES.includes(input.status)) return { error: "status must be one of " + CAR_STATUSES.join(", ") };
+      const { error } = await db.from("vehicles").update({ status: input.status }).eq("id", run.vehicleId);
+      if (error) throw new Error(`setting the status: ${error.message}`);
+      seen.statusSet = input.status;
+      await audit("agent.set_status", { incident_id: run.incidentId, vehicle_id: run.vehicleId, status: input.status });
+      return { set: true, status: input.status };
     }
     case "find_replacement_driver": {
       const ctx = await pickupContext(input.vehicle_id, seen);
@@ -392,11 +415,6 @@ function toRow(m: Move, seen: Seen): { row: Record<string, unknown> } | { error:
     case "message_corridor":
       if (!m.message?.trim()) return { error: `${m.type} needs a message` };
       return { row: { ...base, payload: { body: m.message.trim().slice(0, 2000) } } };
-    case "set_vehicle_status":
-      if (!m.status) return { error: "set_vehicle_status needs a status" };
-      return { row: { ...base, payload: { status: m.status } } };
-    case "escalate_incident":
-      return { row: { ...base, payload: { severity: m.severity ?? "high" } } };
     case "reassign_driver": {
       const d = m.driver_id ? seen.drivers.get(m.driver_id) : undefined;
       if (!d) return { error: "reassign_driver needs a driver_id returned by find_replacement_driver" };
@@ -449,7 +467,7 @@ async function triage(incidentId: string) {
 
   const seen: Seen = {
     departures: new Map(), hotels: new Map(), drivers: new Map(), stays: new Map(), jobs: new Map(),
-    strandedDriverId: null, notified: false,
+    strandedDriverId: null, notified: false, statusSet: null,
   };
   const run: Run = { incidentId, vehicleId: String((context as { vehicle?: { id?: string } }).vehicle?.id ?? "") };
   const messages: ChatMessage[] = [
@@ -524,7 +542,14 @@ async function store(incidentId: string, p: Proposal, seen: Seen) {
     if ("error" in r) dropped.push(r.error);
     else rows.push(r.row);
   }
-  if (rows.length === 0) throw new Error(`proposal had no usable moves: ${dropped.join("; ")}`);
+  if (rows.length === 0) {
+    // Setting the status or messaging the driver may have been all it needed.
+    if (seen.notified || seen.statusSet) {
+      await audit("agent.handled", { incident_id: incidentId, summary: p.summary, status: seen.statusSet, notified: seen.notified, dropped });
+      return { handled: true, moves: 0, dropped };
+    }
+    throw new Error(`proposal had no usable moves: ${dropped.join("; ")}`);
+  }
 
   const trace = p.checks.slice(0, 8).map((s) => s.slice(0, 300));
   const { error } = await db.from("agent_suggestions").insert(
