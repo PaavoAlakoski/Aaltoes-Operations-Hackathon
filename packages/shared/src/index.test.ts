@@ -58,3 +58,46 @@ describe('moving along a corridor', () => {
     expect(pathKm(path)).toBeLessThan(260);
   });
 });
+
+import { legFraction, scheduledPosition } from './schedule';
+import type { Leg } from './index';
+
+describe('where the schedule puts a car', () => {
+  const at = (h: number) => Date.UTC(2026, 9, 25, 8) + h * 3600_000;
+  const iso = (h: number) => new Date(at(h)).toISOString();
+  const place = (lng: number, lat: number) => ({ name: 'x', lat, lng });
+  const leg = (over: Partial<Leg>): Leg => ({
+    id: 'drive', kind: 'drive', title: 'Drive', from: place(0, 0), to: place(0, 0), depart_at: iso(0), arrive_at: iso(1),
+    timezone: 'UTC', arrive_timezone: 'UTC', deadline_at: null, minutes: 60, slack_minutes: 0, instructions: [], link: null,
+    booking_ref: null, status: 'now', progress: 0, path: [[0, 0], [1, 0]], km: 111, source: 'google', evidence: [], ...over,
+  });
+
+  it('drives evenly through a short leg', () => {
+    expect(legFraction(leg({}), at(0.5)).fraction).toBeCloseTo(0.5, 5);
+    expect(legFraction(leg({}), at(-1))).toEqual({ fraction: 0, moving: false });
+    expect(legFraction(leg({}), at(2))).toEqual({ fraction: 1, moving: false });
+  });
+
+  it('stops 45 minutes after 4½ hours at the wheel', () => {
+    // Ten hours of driving: two breaks, 11.5 h in all.
+    const long = leg({ minutes: 600, arrive_at: iso(11.5) });
+    expect(legFraction(long, at(4.5)).fraction).toBeCloseTo(0.45, 5);
+    const onBreak = legFraction(long, at(5));
+    expect(onBreak).toEqual({ fraction: expect.closeTo(0.45, 5), moving: false });
+    expect(legFraction(long, at(5.25 + 4.5)).fraction).toBeCloseTo(0.9, 5);
+  });
+
+  it('waits at the port between the drive and the ferry, then crosses', () => {
+    const legs = [
+      leg({ arrive_at: iso(1) }),
+      leg({ id: 'ferry', kind: 'ferry', minutes: null, depart_at: iso(3), arrive_at: iso(5), path: [[1, 0], [1, 1]] }),
+    ];
+    const port = scheduledPosition(legs, at(2))!;
+    expect(port.leg.id).toBe('drive');
+    expect(port.moving).toBe(false);
+    expect(port.lng).toBeCloseTo(1, 5);
+    const sea = scheduledPosition(legs, at(4))!;
+    expect(sea.leg.id).toBe('ferry');
+    expect(sea.lat).toBeCloseTo(0.5, 3);
+  });
+});

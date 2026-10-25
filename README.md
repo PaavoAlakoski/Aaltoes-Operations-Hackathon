@@ -55,7 +55,7 @@ to it.
   a live operations schema for the driver app and the helper agent (see
   below and `supabase/README.md`).
 - Shared code (`packages/shared`) and a simulator that drives the demo fleet
-  along corridors (`tools/simulator`).
+  along each car's schedule on its Google road (`tools/simulator`).
 
 ### Out of scope
 
@@ -72,7 +72,7 @@ to it.
 | `apps/control-room/` | The control room (v2 with live operations): Vite, React 19, strict TypeScript, React Router, plain CSS, Supabase, Leaflet. Deployed at `/`. |
 | `apps/driver/` | The driver app: Vite, React 19, a phone-first PWA. Deployed at `/driver`. |
 | `packages/shared/` | Generated database types, the Supabase client, realtime channel names, position publishing. |
-| `tools/simulator/` | Signs in as each demo driver and moves the fleet; adds delays and random incidents. |
+| `tools/simulator/` | Signs in as each demo driver and puts every car where its schedule says it is now, in real time; adds random incidents. |
 | `supabase/` | Migrations (applied in name order to one hosted project), `seed.sql`, pgTAP tests, edge functions, `config.toml`. `supabase/README.md` has the access rules. |
 | `dataset/` | The packet: 100 made-up orders and everything around them, as JSONL. `dataset/SCHEMA.md` explains every field and the evidence rules. |
 | `attachments/` | Made-up documents, receipts and photos, with SHA-256s in `attachments/manifest.json`. |
@@ -226,7 +226,7 @@ test before anything that touches the queue, the order page or `decide()`.
 | | `DEMO_PASSWORD` | Password of the seeded `@demo.bahn.test` users. Ask the team; it is not in the repo |
 | Supabase secrets (edge functions) | `OPENROUTER_API_KEY` | Model access for `agent-triage` |
 | | `OPENROUTER_MODEL` | Optional, default `anthropic/claude-opus-5.5` |
-| Simulator, optional | `SIM_SPEED`, `SIM_INCIDENT_EVERY_S` | Speed (default 30× real time); seconds between random incidents (default 240, `0` for none; each one wakes the agent) |
+| Simulator, optional | `SIM_SKIP`, `SIM_INCIDENT_EVERY_S` | Drivers to leave alone, comma-separated (e.g. `leo.quellford`, when you drive him from the driver app); seconds between random incidents (default 240, `0` for none; each one wakes the agent) |
 
 ## Deploy
 
@@ -292,20 +292,25 @@ Drivers sign in to the driver app at `/driver`. Each is on one car:
 | Selma Talverick | `selma.talverick@demo.bahn.test` | Audi Q8 e-tron (`CD-420071`) | Hamburg – Frankfurt – Munich |
 | Elias Halverick | `elias.halverick@demo.bahn.test` | Porsche Macan (`CD-421024`), waiting for pickup | Hamburg – Frankfurt – Munich |
 
-The simulator signs in as fourteen of the drivers, so a driver you are using
-by hand will also be moved by it while it runs. Leo is left out: his Overview
-shows the whole Cologne → Travemünde → ferry → Helsinki job from the dataset,
-and his "Simulated drive" follows the real road (Google Routes, fetched once
-and cached) at 85 km/h.
+The simulator signs in as all fifteen drivers with a car and puts each car
+where its itinerary says it is now: along the real road (Google Routes,
+fetched once and cached) at road speed, stopped 45 minutes after every 4½
+hours at the wheel, waiting at the port, crossing on the ferry. In real time,
+so the cars creep. Cars waiting for pickup or delivered stay put; a random
+incident stops its car and it then runs behind schedule. The driver app's
+"Simulated drive" follows the same schedule, so both put the car in the same
+place; leave a driver you drive by hand to the app with `SIM_SKIP`, or its
+Pause will be overridden. Leo's Overview shows the whole Cologne → Travemünde
+→ ferry → Helsinki job from the dataset.
 
 ## A 3-minute demo
 
 Two windows side by side: the control room's Needs you signed in as a
 dispatcher (`mira.kestelund@demo.bahn.test`), and the driver app at `/driver`
 at phone size signed in as Leo (`leo.quellford@demo.bahn.test`). Start
-`npm run simulate` a minute before.
+`SIM_SKIP=leo.quellford npm run simulate` a minute before.
 
-1. **The room (30 s).** Cars move on their corridors in real time: Helsinki to
+1. **The room (30 s).** Cars move along their roads in real time: Helsinki to
    Oulu, the Travemünde ferry, Copenhagen to Hamburg. The line under
    "On the road now" shows on-time share, open incidents and time to acknowledge. Sign in as Oskar in a
    second window and each sees the other on shift, and which incident they

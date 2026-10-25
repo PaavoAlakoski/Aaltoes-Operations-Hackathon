@@ -170,3 +170,4 @@ export function groupProposals(rows: Suggestion[]): Proposal[] {
 }
 
 export * from './position';
+export * from './schedule';

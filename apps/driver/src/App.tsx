@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   PositionPublisher, createOpsClient, delayPhrase, euros, fractionNear, keepPresence, km, localTime, minutesPhrase, pathKm, pointAlong,
+  scheduledPosition,
   type ChatMessage, type Corridor, type DriverStay, type Incident, type Itinerary, type Leg, type LngLat, type MarketJob, type Message,
   type OpsClient, type PickupSite, type Profile, type Vehicle,
 } from '@bahn/shared';
@@ -22,8 +23,6 @@ const SEND_EVERY_MS = 3000;
 let channelSeq = 0;
 /** A simulated drive covers the corridor fast enough to see it move: ~1.5 km per fix. */
 const SIM_KM_PER_FIX = 1.5;
-/** Along an itinerary's real road it drives at road speed instead: 85 km/h. */
-const ROAD_KM_PER_FIX = (85 * SEND_EVERY_MS) / 3_600_000;
 /** How long a paused car stands still before the agent notices (minutes in real life). */
 const STATIONARY_AFTER_MS = 15_000;
 
@@ -434,7 +433,7 @@ function Overview({ db, vehicle, corridor, incidents, itinerary, tonight }: {
       {corridor && (
         <LocationSharing
           db={db} vehicle={vehicle} corridor={corridor}
-          route={now?.kind === 'drive' ? now.path : null} routeEnd={now?.to.name} atSea={now?.kind === 'ferry'}
+          route={now?.kind === 'drive' ? now.path : null} routeEnd={now?.to.name} atSea={now?.kind === 'ferry'} legs={legs}
         />
       )}
       <OpenIncidents incidents={incidents} />
@@ -547,14 +546,16 @@ function OpenIncidents({ incidents }: { incidents: Incident[] }) {
 
 /**
  * Shares the car's position: a simulated drive (the default), or the phone's
- * GPS. With an itinerary the drive follows the real road of the leg in progress
- * at road speed and stops at its end; otherwise it loops along the corridor
- * quickly. Pausing holds the car where it is and lets its delay grow; once the
+ * GPS. With an itinerary the car is where its schedule says it is now
+ * (scheduledPosition, the same as the fleet simulator): along the real road at
+ * road speed, on its breaks, waiting at the port. Otherwise it loops along the
+ * corridor quickly. Pausing holds the car where it is and lets its delay grow,
+ * and the car then runs that far behind its schedule; once the
  * position has stood still for a while the agent checks the ETA and asks the
  * driver in Chat why they stopped. Control is not told unless the answer needs it.
  */
-function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea = false }: {
-  db: OpsClient; vehicle: Vehicle; corridor: Corridor; route?: LngLat[] | null; routeEnd?: string; atSea?: boolean;
+function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea = false, legs = null }: {
+  db: OpsClient; vehicle: Vehicle; corridor: Corridor; route?: LngLat[] | null; routeEnd?: string; atSea?: boolean; legs?: Leg[] | null;
 }) {
   const [mode, setMode] = useState<'gps' | 'simulate'>('simulate');
   const [pausedAt, setPausedAt] = useState<number | null>(null);
@@ -562,11 +563,12 @@ function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea 
   const [last, setLast] = useState<{ at: Date; stored: boolean; error?: string } | null>(null);
   const [kmLeft, setKmLeft] = useState<number | null>(null);
   const path = useMemo(() => route ?? (corridor.path as LngLat[]), [route, corridor]);
-  const total = useMemo(() => pathKm(path), [path]);
   const fraction = useRef(0);
   const fix = useRef<{ lat: number; lng: number } | null>(null);
   // The delay when the pause began; standing still adds to it.
   const pauseDelay = useRef(0);
+  // How far behind its schedule the car runs, in ms: the pauses so far.
+  const lag = useRef(0);
   // Start from where the car is whenever the line to follow changes.
   const start = useRef({ lat: vehicle.lat, lng: vehicle.lng });
   start.current = { lat: vehicle.lat, lng: vehicle.lng };
@@ -597,15 +599,16 @@ function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea 
       );
     }
     const tick = async () => {
-      if (sim && pausedAt == null) {
-        if (route) {
-          fraction.current = Math.min(1, fraction.current + ROAD_KM_PER_FIX / (total || 1));
-          setKmLeft((1 - fraction.current) * total);
-        } else {
-          fraction.current = (fraction.current + SIM_KM_PER_FIX / Math.max(1, (path.length - 1) * 120)) % 1;
+      const planned = sim && route && legs ? scheduledPosition(legs, Date.now() - lag.current) : null;
+      if (planned) {
+        if (pausedAt == null) {
+          fix.current = planned;
+          setKmLeft(planned.kmLeft);
         }
+      } else if (sim) {
+        if (pausedAt == null) fraction.current = (fraction.current + SIM_KM_PER_FIX / Math.max(1, (path.length - 1) * 120)) % 1;
+        fix.current = pointAlong(path, fraction.current);
       }
-      if (sim) fix.current = pointAlong(path, fraction.current);
       if (!fix.current) return;
       const delay = pausedAt != null ? pauseDelay.current + (Date.now() - pausedAt) / 1000 : vehicle.delay_seconds;
       const r = await publisher.publish(fix.current.lat, fix.current.lng, delay);
@@ -618,7 +621,7 @@ function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea 
       if (watch != null) navigator.geolocation.clearWatch(watch);
       publisher.close();
     };
-  }, [mode, sim, idle, pausedAt, db, corridor.id, vehicle.id, vehicle.delay_seconds, path, route, total]);
+  }, [mode, sim, idle, pausedAt, db, corridor.id, vehicle.id, vehicle.delay_seconds, path, route, legs]);
 
   // Standing still long enough looks like a stop to the agent, once per pause.
   useEffect(() => {
@@ -640,6 +643,7 @@ function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea 
     setPauseNote('Paused. The car is standing still.');
   };
   const resume = () => {
+    if (pausedAt != null) lag.current += Date.now() - pausedAt;
     setPausedAt(null);
     setPauseNote(null);
   };
@@ -661,7 +665,7 @@ function LocationSharing({ db, vehicle, corridor, route = null, routeEnd, atSea 
         {idle ? 'On the ferry; the drive carries on when you are back on the road.' : last ? (
           last.error ? <span className="error">{last.error}</span> : arrived ? `Arrived at ${routeEnd ?? 'the end of the road'}.` : paused ? pauseNote : (
             `Sent ${last.at.toLocaleTimeString()}${last.stored ? ' · saved' : ''}` +
-            (simulating && kmLeft != null ? ` · ${Math.round(kmLeft)} km to ${routeEnd ?? 'go'} at 85 km/h` : '')
+            (simulating && kmLeft != null ? ` · ${Math.round(kmLeft)} km to ${routeEnd ?? 'go'}, ${lag.current >= 60_000 ? `${Math.round(lag.current / 60_000)} min behind schedule` : 'on schedule'}` : '')
           )
         ) : 'Starting…'}
       </p>
