@@ -15,8 +15,9 @@
 }
 
 .bar {
-  border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  border-bottom: 1px solid var(--bar-line);
+  background: var(--bar-bg);
+  color: var(--bar-text);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -44,6 +45,17 @@
   grid-column: 3;
   justify-self: end;
 }
+/* Sign in / name / Sign out sit on the bar; the sign-in form that drops from it keeps its own colours. */
+.account > :global(span) {
+  color: var(--bar-text);
+}
+.account > :global(span) > button,
+.account > :global(span) > span {
+  color: var(--bar-text-active);
+}
+.bar :focus-visible {
+  outline-color: var(--bar-focus);
+}
 
 .link {
   display: inline-flex;
@@ -52,15 +64,15 @@
   padding: var(--s2) var(--s3);
   border-radius: var(--radius);
   text-decoration: none;
-  color: var(--text-meta);
+  color: var(--bar-text);
   transition: background var(--fast) var(--ease);
 }
 .link:hover {
-  background: var(--hover);
-  color: var(--text);
+  background: var(--bar-hover);
+  color: var(--bar-text-active);
 }
 .active {
-  color: var(--text);
+  color: var(--bar-text-active);
   font-weight: var(--weight-bold);
 }
 
@@ -72,7 +84,7 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--red);
+  background: var(--badge);
   color: #fff;
   font-size: 12px;
   font-weight: var(--weight-bold);

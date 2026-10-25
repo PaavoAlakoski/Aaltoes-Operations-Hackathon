@@ -180,10 +180,10 @@ function Room() {
             </ul>
           )}
           <div className={s.queueFoot}>
-            <button type="button" className={s.button} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
+            <button type="button" className={s.simulate} onClick={simulate} title="Stage the Travemünde ferry scenario: a car stuck in a Stau, check-in closing">
               Simulate ferry traffic jam
             </button>
-            <button type="button" className={s.button} onClick={simulateTrain} title="Stage the Munich pickup: the driver's ICE is 3 h late and the dealer hands keys over in person only">
+            <button type="button" className={s.simulate} onClick={simulateTrain} title="Stage the Munich pickup: the driver's ICE is 3 h late and the dealer hands keys over in person only">
               Simulate train delay
             </button>
             <ResetDemo />
@@ -272,14 +272,14 @@ function IncidentRow({ incident: i, vehicle, pending }: { incident: Incident; ve
   const to = orderPath(vehicle, i.id);
   const body = (
     <>
-      <span className={s.sev} data-severity={i.severity} aria-label={`Severity ${i.severity}`} />
+      <span className={s.sev} data-severity={i.severity} data-active={i.status !== 'resolved' || undefined} aria-label={`Severity ${i.severity}`} />
       <span className={s.rowMain}>
         <span className={s.rowTitle}>
           {KIND_WORD[i.kind] ?? i.kind} · {vehicle?.label ?? i.vehicle_id} <span className={`mono ${s.ref}`}>{vehicle?.order_ref}</span>
         </span>
         <span className={s.meta}>
           {i.status === 'open' ? 'Open' : i.status === 'acknowledged' ? 'Acknowledged' : 'Resolved'} · {minutesAgo(i.created_at)}
-          {pending > 0 && <> · <strong className={s.attention}>{pending} to decide</strong></>}
+          {pending > 0 && <> <strong className={s.decideBadge}>{pending} to decide</strong></>}
           {i.status !== 'resolved' && <> <InTimePill vehicle={vehicle} /></>}
           {watchers.length > 0 && <> · {watchers.map((w) => w.name.split(' ')[0]).join(', ')} looking</>}
         </span>

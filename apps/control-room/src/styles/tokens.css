@@ -18,8 +18,27 @@
 
   /* Roles */
   --bg: var(--birch);
-  /* Cards on the page: the lead decision and popovers. Same as the page in the Bahn theme. */
+  /* Cards on the page: the lead decision, lists and popovers. Same as the page in the Bahn theme. */
   --card: var(--bg);
+  --card-shadow: none;
+
+  /* The top bar and its count badge */
+  --bar-bg: var(--bg);
+  --bar-line: var(--line);
+  --bar-text: var(--text-meta);
+  --bar-text-active: var(--text);
+  --bar-hover: var(--hover);
+  --bar-focus: var(--focus);
+  --badge: var(--red);
+
+  /* Live incidents: an open incident is an exception, not a log line */
+  --text-strong: var(--text);
+  --alert-dot: var(--red);
+  --action-badge-bg: rgba(176, 70, 23, 0.1);
+  --action-badge-text: var(--orange-ink);
+  --row-hover: var(--hover);
+  --sim-bg: var(--asphalt);
+  --sim-bg-hover: var(--asphalt);
   --text: var(--asphalt);
   --text-meta: var(--warm-grey);
   --line: var(--sand-light);
@@ -83,6 +102,24 @@
   --hover: rgba(15, 23, 42, 0.04);
   --selected: rgba(29, 78, 216, 0.08);
   --shadow-lift: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.07);
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);   /* shadow-sm */
+
+  /* Deep blue top bar (blue-950) with light text (slate-200), white for the current tab */
+  --bar-bg: #172554;
+  --bar-line: #172554;
+  --bar-text: #e2e8f0;
+  --bar-text-active: #ffffff;
+  --bar-hover: rgba(255, 255, 255, 0.08);
+  --bar-focus: #ffffff;
+  --badge: #dc2626;                                   /* red-600 */
+
+  --text-strong: #0f172a;            /* slate-900: incident titles */
+  --alert-dot: #ef4444;              /* red-500: open incident, pulsing */
+  --action-badge-bg: #fef3c7;        /* amber-100 */
+  --action-badge-text: #92400e;      /* amber-800 */
+  --row-hover: #f8fafc;              /* slate-50 */
+  --sim-bg: #2563eb;                 /* blue-600: demo simulation buttons */
+  --sim-bg-hover: #1d4ed8;           /* blue-700 */
 }
 
 @media (min-width: 720px) {

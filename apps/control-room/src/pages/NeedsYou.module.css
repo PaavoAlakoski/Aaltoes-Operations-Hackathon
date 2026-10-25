@@ -11,11 +11,15 @@
 
 .rows {
   margin-top: var(--s3);
-  border-top: 1px solid var(--line);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
 }
 
-.rows > li {
-  border-bottom: 1px solid var(--line);
+.rows > li + li {
+  border-top: 1px solid var(--line);
 }
 
 .row {
@@ -23,10 +27,8 @@
   /* Fixed side columns: each row is its own grid, so they must not size to their text. */
   grid-template-columns: 14px 1fr 72px 200px;
   gap: var(--s3);
-  padding: var(--s3) var(--s2);
-  margin: 0 calc(-1 * var(--s2));
+  padding: var(--s3) var(--s4);
   text-decoration: none;
-  border-radius: var(--radius);
   transition: background var(--fast) var(--ease);
 }
 .row:hover {
