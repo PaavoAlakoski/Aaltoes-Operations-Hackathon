@@ -1,6 +1,6 @@
 // The driver app: one car, one shift. The Overview shows the whole job as legs
-// (getting there, the car's own drives and ferry, the way home) when the order
-// has an itinerary, else the car and what control sent. It shares the car's
+// (pickup, the car's drives and ferry, handover; for Leo's order also getting
+// there and the way home), else the car and what control sent. It shares the car's
 // position (from the phone, or a simulated drive along the road), and lets the
 // driver chat with the agent, which tells control only when a problem needs a
 // person. Row-level security means it can only ever see this driver's own car,
@@ -163,8 +163,10 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
 
   useEffect(() => keepPresence(db), [db]);
 
-  // Only drivers on a car have an itinerary, and only some orders have one.
+  // Every driver on a car gets an itinerary, built when they sign in and
+  // again when the car moves on to another leg (picked up, boarded, delivered).
   const vehicleId = vehicle?.id ?? null;
+  const vehicleStatus = vehicle?.status ?? null;
   useEffect(() => {
     if (!vehicleId) return setItinerary(null);
     let cancelled = false;
@@ -172,7 +174,7 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [db, vehicleId]);
+  }, [db, vehicleId, vehicleStatus]);
 
   // RLS filters these streams to this driver's own rows.
   useEffect(() => {
@@ -344,6 +346,9 @@ function Tonight({ db, stays, offers, setOffers }: {
 
 type Live = { progress: number; eta: number | null; slack: number | null };
 
+/** Farther than this from the leg's line, the car is not following it, so the plan's own timing stands. */
+const OFF_ROUTE_KM = 25;
+
 /** "Sat 21:02" in the clock of the place a time belongs to. */
 function when(iso: string, timeZone: string) {
   return new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone });
@@ -365,8 +370,8 @@ function spare(min: number) {
   return min >= 2 * 1440 ? `${Math.floor(min / 1440)} days` : min >= 1440 ? '1 day' : minutesPhrase(min);
 }
 
-/** How far along a path the vertex nearest to a point is, 0..1. */
-function progressOn(path: LngLat[], lat: number, lng: number): number {
+/** How far along a path the vertex nearest to a point is (0..1), or null when the point is off it. */
+function progressOn(path: LngLat[], lat: number, lng: number): number | null {
   const total = pathKm(path) || 1;
   let run = 0, best = 0, bestKm = Infinity;
   for (let i = 0; i < path.length; i++) {
@@ -377,7 +382,7 @@ function progressOn(path: LngLat[], lat: number, lng: number): number {
       best = run;
     }
   }
-  return best / total;
+  return bestKm > OFF_ROUTE_KM ? null : best / total;
 }
 
 const KIND_WORD: Record<Leg['kind'], string> = {
@@ -395,6 +400,7 @@ function Overview({ db, vehicle, corridor, incidents, itinerary, tonight }: {
   const live = useMemo<Live | null>(() => {
     if (now?.kind !== 'drive' || !now.path || vehicle.lat == null || vehicle.lng == null) return null;
     const progress = progressOn(now.path, vehicle.lat, vehicle.lng);
+    if (progress == null) return null;
     if (now.minutes == null) return { progress, eta: null, slack: null };
     const left = (1 - progress) * now.minutes;
     const eta = Date.now() + (left + Math.floor(left / 270) * 45) * 60_000 + vehicle.delay_seconds * 1000;
