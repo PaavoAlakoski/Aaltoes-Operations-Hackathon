@@ -36,9 +36,10 @@ function facts(m: Suggestion, timeZone: string): Facts | null {
       return {
         headline: str('full_name') ?? 'Another driver',
         lines: [
-          [num('drive_minutes') != null && `${num('drive_minutes')} min drive`, arrives && `at the dealer ${localTime(arrives, timeZone)}`]
+          [num('drive_minutes') != null && `${num('drive_minutes')} min drive`, arrives && `at the ${p.to === 'car' ? 'car' : 'dealer'} ${localTime(arrives, timeZone)}`]
             .filter(Boolean).join(' · '),
           p.makes_closing === true ? 'Makes the key handover' : p.makes_closing === false ? 'Would miss the key handover' : '',
+          p.from_driver_availability === 'off' ? 'The current driver is taken off work' : '',
         ].filter(Boolean),
       };
     }

@@ -5,7 +5,7 @@ import { driveTime, kmBetween, type Drive } from "./google.ts";
 
 export type PickupContext = {
   now: string;
-  vehicle: { id: string; label: string; order_ref: string | null; status: string };
+  vehicle: { id: string; label: string; order_ref: string | null; status: string; lat: number | null; lng: number | null };
   site: {
     id: string; name: string; city: string; lat: number; lng: number; timezone: string;
     opening_hours: Record<string, string | null>; closes_at: string | null;

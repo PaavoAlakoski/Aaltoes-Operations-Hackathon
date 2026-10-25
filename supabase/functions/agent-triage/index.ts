@@ -41,11 +41,22 @@ Work like this:
      closing time), whether the keys can still be collected after closing, and that control is arranging the rest.
      It is sent immediately; do not repeat it as a move.
   3. If the keys cannot be collected after closing: call find_replacement_driver and propose reassign_driver for the
-     fastest driver who makes it before closing (makes_closing true). Then call find_stay_near at ends_at from
+     fastest driver who makes it before closing (makes_closing true), with driver_free_after true. Then call find_stay_near at ends_at from
      check_driver_eta (where the stranded driver will be tonight) and propose book_stay for one night at the nearest
      suitable hotel. Then call find_market_jobs_near the same point with after = tomorrow 06:00 local, and propose
      offer_market_job for the best job (nearest, sensible window). Three moves, in that order.
   4. If the keys can be collected late (key box), propose only a message_vehicle saying what to do.
+- If the car's driver cannot get to the car or its keys at all, for any reason (ill, injured, in hospital, a personal
+  emergency, stranded with no way to arrive in time), this is a driver substitution, whether the car still waits at
+  the dealer or is already on the road:
+  1. If anyone is hurt, set_car_status stopped (unless the car is still waiting for pickup).
+  2. Call find_replacement_driver and propose reassign_driver for the fastest suitable driver (for a pickup, one who
+     makes it before closing). driver_free_after is false when the driver cannot work (ill, injured, in hospital),
+     true when they could take other work. Approving it takes the car out of that driver's app.
+  3. Only for a driver who can still work and is stranded overnight, add book_stay and offer_market_job as in the
+     train-delay recovery. Never for a driver who is ill or hurt.
+  4. If find_replacement_driver returns nobody, propose a message_vehicle telling the driver control is finding
+     someone, and say in the summary that no free driver is near.
 - If the incident means the car's status is wrong, call set_car_status yourself before proposing anything: stopped
   when the car is not moving (breakdown, accident, waiting on the roadside), needs_check when it must be inspected
   before driving on (damage, warning lights), moving when it is back on the road. Do not propose it as a move.
@@ -163,7 +174,7 @@ const tools: ToolDef[] = [
   {
     name: "find_replacement_driver",
     description:
-      "Free drivers near the car's pickup dealer with their Google drive time to it, arrival time and whether they make the key handover before closing. Fastest first.",
+      "Free drivers near where a substitute must go (the pickup dealer while the car waits for pickup, else the car's last position) with their Google drive time there, arrival time and, for a pickup, whether they make the key handover before closing. Fastest first.",
     strict: true,
     input_schema: {
       type: "object",
@@ -229,12 +240,17 @@ const tools: ToolDef[] = [
               departure_id: { type: ["string", "null"] },
               hotel_id: { type: ["string", "null"] },
               driver_id: { type: ["string", "null"], description: "reassign_driver: the replacement, from find_replacement_driver." },
+              driver_free_after: {
+                type: ["boolean", "null"],
+                description: "reassign_driver: whether the driver being replaced can take other work (true) or is taken off work because they are ill or hurt (false).",
+              },
               place_id: { type: ["string", "null"], description: "book_stay: from find_stay_near." },
               job_id: { type: ["string", "null"], description: "offer_market_job: from find_market_jobs_near." },
               nights: { type: ["integer", "null"] },
             },
             required: [
-              "type", "title", "rationale", "message", "departure_id", "hotel_id", "driver_id", "place_id", "job_id", "nights",
+              "type", "title", "rationale", "message", "departure_id", "hotel_id", "driver_id", "driver_free_after", "place_id",
+              "job_id", "nights",
             ],
             additionalProperties: false,
           },
@@ -254,6 +270,7 @@ type Move = {
   departure_id: string | null;
   hotel_id: string | null;
   driver_id: string | null;
+  driver_free_after: boolean | null;
   place_id: string | null;
   job_id: string | null;
   nights: number | null;
@@ -269,7 +286,7 @@ type Proposal = { summary: string; checks: string[]; moves: Move[] };
 type Seen = {
   departures: Map<string, { rebooking_fee_cents: number }>;
   hotels: Map<string, { nightly_rate_cents: number }>;
-  drivers: Map<string, { full_name: string; minutes: number; arrives_at: string; makes_closing: boolean | null }>;
+  drivers: Map<string, { full_name: string; minutes: number; arrives_at: string; makes_closing: boolean | null; to: "dealer" | "car" }>;
   stays: Map<string, { name: string; address: string; lat: number | null; lng: number | null }>;
   jobs: Map<string, { order_ref: string; label: string; fee_cents: number }>;
   /** The car's driver when the agent first looked: the one a stay or a job is for. */
@@ -321,16 +338,20 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
     }
     case "find_replacement_driver": {
       const ctx = await pickupContext(input.vehicle_id, seen);
-      if (!ctx.site) return { error: "No pickup site recorded for this car." };
-      const site = ctx.site;
+      // A pickup sends the substitute to the dealer; a car on the road, to where it last reported.
+      const site = ctx.vehicle.status === "waiting_pickup" ? ctx.site : null;
+      const car = ctx.vehicle.lat != null && ctx.vehicle.lng != null ? { lat: ctx.vehicle.lat, lng: ctx.vehicle.lng } : null;
+      const target = site ?? car ?? ctx.site;
+      if (!target) return { error: "Neither a pickup dealer nor a position is recorded for this car." };
+      const tz = (site ?? ctx.site)?.timezone ?? "Europe/Berlin";
       const candidates = (await rpc("agent_available_drivers", { p_vehicle_id: input.vehicle_id })) as Array<{
         driver_id: string;
         full_name: string;
         lat: number;
         lng: number;
       }>;
-      const drives = await driveTimes(input.vehicle_id, candidates.map((c) => ({ lat: c.lat, lng: c.lng })), site);
-      const closes = site.closes_at ? new Date(site.closes_at) : null;
+      const drives = await driveTimes(input.vehicle_id, candidates.map((c) => ({ lat: c.lat, lng: c.lng })), target);
+      const closes = site?.closes_at ? new Date(site.closes_at) : null;
       const rows = candidates.map((c, i) => {
         const d = drives[i];
         const arrives = new Date(Date.now() + d.minutes * 60_000);
@@ -341,15 +362,21 @@ async function runTool(name: string, input: Record<string, any>, seen: Seen, run
           road_km: d.km,
           source: d.source,
           arrives_at: arrives.toISOString(),
-          arrives_local: hhmm(arrives, site.timezone),
-          makes_closing: site.key_handover === "key_box" ? true : closes ? arrives <= closes : null,
+          arrives_local: hhmm(arrives, tz),
+          makes_closing: !site ? null : site.key_handover === "key_box" ? true : closes ? arrives <= closes : null,
           minutes_to_spare: closes ? Math.round((closes.getTime() - arrives.getTime()) / 60_000) : null,
         };
       }).sort((a, b) => a.drive_minutes - b.drive_minutes);
       for (const r of rows) {
-        seen.drivers.set(r.driver_id, { full_name: r.full_name, minutes: r.drive_minutes, arrives_at: r.arrives_at, makes_closing: r.makes_closing });
+        seen.drivers.set(r.driver_id, {
+          full_name: r.full_name, minutes: r.drive_minutes, arrives_at: r.arrives_at, makes_closing: r.makes_closing, to: site ? "dealer" : "car",
+        });
       }
-      return { site: site.name, closes_local: site.closes_at ? hhmm(site.closes_at, site.timezone) : null, candidates: rows };
+      return {
+        goes_to: site ? `the dealer ${site.name}` : "the car's last reported position",
+        closes_local: site?.closes_at ? hhmm(site.closes_at, site.timezone) : null,
+        candidates: rows,
+      };
     }
     case "find_stay_near": {
       const found = await hotelsNear(run.vehicleId, { lat: Number(input.lat), lng: Number(input.lng) });
@@ -423,7 +450,8 @@ function toRow(m: Move, seen: Seen): { row: Record<string, unknown> } | { error:
           ...base,
           payload: {
             driver_id: m.driver_id, from_driver_id: seen.strandedDriverId, full_name: d.full_name,
-            drive_minutes: d.minutes, arrives_at: d.arrives_at, makes_closing: d.makes_closing, driver_message: m.message,
+            drive_minutes: d.minutes, arrives_at: d.arrives_at, makes_closing: d.makes_closing, to: d.to, driver_message: m.message,
+            from_driver_availability: m.driver_free_after === false ? "off" : "available",
           },
         },
       };

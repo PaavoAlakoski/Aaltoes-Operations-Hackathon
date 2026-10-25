@@ -41,6 +41,8 @@ Tell control (call notify_control_room) only when at least one of these is true:
   failure, warning lights with smoke or loss of power, flat tyre with no spare, an accident).
 - extra_costs: solving it may cost money beyond the normal trip (tow, repair, a hotel night, ferry rebooking, a
   new train or taxi, damage to the car, a fine).
+- driver_unable: the driver cannot get to the car or its keys, or cannot carry on driving it (ill, injured, in
+  hospital, a personal emergency). Control then finds another driver.
 Anything else you handle in the chat and do not pass on: traffic and delays of a few hours, directions, opening
 hours, questions about the car or the route, small things on the car that do not stop the drive.
 
@@ -74,7 +76,7 @@ type LlmMessage =
   | { role: "tool"; tool_call_id: string; content: string };
 
 const KINDS = ["breakdown", "accident", "delay", "car_not_ready", "documents", "ferry", "damage", "other"];
-const REASONS = ["delay_1_day_plus", "emergency_breakdown", "extra_costs"];
+const REASONS = ["delay_1_day_plus", "emergency_breakdown", "extra_costs", "driver_unable"];
 
 const tools = [
   {
@@ -97,7 +99,7 @@ const tools = [
   {
     name: "notify_control_room",
     description:
-      "Raise an incident for the control room. Only for a delay of a day or more, an emergency breakdown, or possible extra costs. Once per problem.",
+      "Raise an incident for the control room. Only for a delay of a day or more, an emergency breakdown, possible extra costs, or a driver who cannot do the job. Once per problem.",
     parameters: {
       type: "object",
       properties: {
@@ -177,7 +179,10 @@ async function runTool(name: string, input: Record<string, any>, run: Run): Prom
         .eq("vehicle_id", run.vehicleId).eq("kind", input.kind).eq("source", "driver").neq("status", "resolved")
         .gte("created_at", since).limit(1).maybeSingle();
       if (dup) return { error: "Control already has an open incident for this; it was not raised again.", incident_id: dup.id };
-      const label = { delay_1_day_plus: "delay of a day or more", emergency_breakdown: "emergency breakdown", extra_costs: "possible extra costs" }[
+      const label = {
+        delay_1_day_plus: "delay of a day or more", emergency_breakdown: "emergency breakdown", extra_costs: "possible extra costs",
+        driver_unable: "the driver cannot do the job",
+      }[
         input.reason as string
       ];
       // As the driver: the database stamps it as their report and starts triage.

@@ -239,7 +239,9 @@ function Driver({ db, userId }: { db: OpsClient; userId: string }) {
         <p className="hello">Hi {profile.full_name.split(' ')[0]}</p>
         <div className="stack">
           {tonight}
-          {stays.length === 0 && offers.length === 0 && <p className="card">You are not on a car right now. Control will put you on one.</p>}
+          {profile.availability === 'off'
+            ? <p className="card">You are off work, so there is no car for you right now. Control will be in touch.</p>
+            : stays.length === 0 && offers.length === 0 && <p className="card">You are not on a car right now. Control will put you on one.</p>}
           <Inbox db={db} userId={userId} messages={messages} incidents={incidents} setMessages={setMessages} />
         </div>
       </Shell>
