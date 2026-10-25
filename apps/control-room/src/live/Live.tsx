@@ -222,13 +222,11 @@ function ConnectionWarning() {
 function Kpis() {
   const { kpis, vehicles } = useOps();
   const moving = [...vehicles.values()].filter((v) => v.status === 'moving' || v.status === 'on_ferry').length;
-  const ack = kpis?.avg_ack_seconds;
   const parts = [
     `${moving} cars on the road`,
     kpis?.on_time_pct != null && `${kpis.on_time_pct}% on time`,
     kpis?.open_incidents != null && `${kpis.open_incidents} open`,
     kpis?.pending_suggestions != null && `${kpis.pending_suggestions} to decide`,
-    ack != null && `${ack < 60 ? `${ack} s` : `${Math.round(ack / 60)} min`} to acknowledge`,
   ].filter(Boolean);
   return <p className={s.kpis}>{parts.join(' · ')}</p>;
 }
