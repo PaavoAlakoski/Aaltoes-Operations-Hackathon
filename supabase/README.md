@@ -19,6 +19,7 @@ anyone). The rest is the live operations backend and does not touch them.
 | `…151921_ops_scenario_messages` | the scenario also clears the previous run's messages, so the agent starts from the same world |
 | `…183518_train_delay` | pickup sites, driver trips and positions, the driver market, driver stays; the pickup-watch cron; reassign, stay and job moves; `answer_market_job`; the train-delay scenario |
 | `…184616_recovery_messages` | the agent's own driver message replaces the standard text instead of repeating it |
+| `…102829_auto_resolve_incident` | an incident resolves itself once every move is settled, one ran and a person decided one (a failed move keeps it open) |
 
 Vocabulary: the brief's "lines" are **corridors** (routes cars are driven along, some with a ferry);
 "vehicles" are **the cars being delivered**, one driver each.
@@ -74,6 +75,7 @@ incident inserted ──trigger (pg_net, async)──▶ agent-triage ──▶ 
                                     agent_suggestions (one row per move, shared group_id)
 person approves a move (decide_suggestion) ──trigger──▶ execute-suggestion ──▶ apply_suggestion
                                                                     (whitelisted moves only, audit_log)
+last move settled ──trigger──▶ incident resolved (auto_resolve_incident)
 ```
 
 ### The train-delay recovery

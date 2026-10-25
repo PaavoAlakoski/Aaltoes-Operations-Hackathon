@@ -8,6 +8,8 @@ import { delayPhrase, type Incident, type Vehicle } from '@bahn/shared';
 import { Empty, ErrorState, SkeletonRows } from '../ui/states';
 import { ProposalCard } from './ProposalCard';
 import { InTimeBanner, InTimePill } from './InTime';
+import { DealerChat } from './DealerChat';
+import { LiveMap } from './LiveMap';
 import { opsConfigured, useOps } from './ops';
 import s from './live.module.css';
 
@@ -311,6 +313,10 @@ export function OrderLive({ reference }: { reference: string }) {
   if (!opsConfigured || ops.status !== 'ready' || !ops.profile || ops.profile.role === 'driver' || !vehicle) return null;
 
   const driver = ops.staff.find((p) => p.vehicle_id === vehicle.id && p.role === 'driver');
+  const site = vehicle.pickup_site_id ? ops.sites.get(vehicle.pickup_site_id) : undefined;
+  const corridor = ops.corridors.filter((c) => c.id === vehicle.corridor_id);
+  const hasPosition = vehicle.lat != null && vehicle.lng != null;
+  const focus = hasPosition ? { lat: vehicle.lat!, lng: vehicle.lng! } : site ? { lat: site.lat, lng: site.lng } : null;
   const pick = (id: string) => {
     const next = new URLSearchParams(params);
     next.set('incident', id);
@@ -332,7 +338,24 @@ export function OrderLive({ reference }: { reference: string }) {
         </p>
       </div>
 
+      {focus ? (
+        <LiveMap
+          className={s.mapSmall}
+          corridors={corridor}
+          vehicles={[vehicle]}
+          flagged={new Set(incidents.some((i) => i.status !== 'resolved') ? [vehicle.id] : [])}
+          selectedVehicle={vehicle.id}
+          onSelect={() => {}}
+          focus={focus}
+          site={site ? { lat: site.lat, lng: site.lng, name: site.name } : null}
+        />
+      ) : (
+        <p className={s.meta}>No position yet.</p>
+      )}
+      {!hasPosition && focus && <p className={s.meta}>No position for the car yet; the ring is the pickup dealer.</p>}
+
       <InTimeBanner vehicle={vehicle} />
+      <DealerChat vehicle={vehicle} />
 
       {incidents.length > 1 && (
         <ul className={s.tabs} aria-label="Incidents on this car">

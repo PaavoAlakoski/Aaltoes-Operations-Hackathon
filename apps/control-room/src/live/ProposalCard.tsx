@@ -3,6 +3,7 @@
 // decision and the backend carries out that one move.
 import { useState } from 'react';
 import { euros, localTime, type Proposal, type Suggestion } from '@bahn/shared';
+import { Icon } from '../ui/Icon';
 import s from './live.module.css';
 
 const MOVE_WORD: Record<string, string> = {
@@ -130,9 +131,9 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
           {driverMoves.length > 0 && (
             <section className={s.lane} aria-label="The driver">
               <h4 className={s.laneTitle}>{strandedName ?? 'The driver'}: tonight and tomorrow</h4>
-              <ol className={s.laneMoves}>
+              <ol className={s.laneMoves} data-pair={driverMoves.length > 1 || undefined}>
                 {driverMoves.map((m) => (
-                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} />
+                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} collapsible />
                 ))}
               </ol>
             </section>
@@ -158,14 +159,17 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
   );
 }
 
-function Move({ move, n, locked, onDecide, facts }: {
+function Move({ move, n, locked, onDecide, facts, collapsible = false }: {
   move: Suggestion;
   n: number;
   locked: boolean;
   onDecide: (id: string, decision: 'approve' | 'reject', note?: string) => Promise<void>;
   /** Set for the big recovery cards. */
   facts?: Facts | null;
+  /** Shut until clicked: the driver lane's two cards sit side by side. */
+  collapsible?: boolean;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -187,10 +191,35 @@ function Move({ move, n, locked, onDecide, facts }: {
     }
   }
 
+  const step = <span className={s.step} aria-hidden>{move.status === 'executed' ? '✓' : n}</span>;
+  const bodyId = `move-${move.id}`;
+
+  if (collapsible) {
+    return (
+      <li className={s.move} data-status={move.status} data-big={facts ? true : undefined} data-collapsible data-open={isExpanded || undefined}>
+        <button type="button" className={s.moveToggle} aria-expanded={isExpanded} aria-controls={bodyId} onClick={() => setIsExpanded((v) => !v)}>
+          {step}
+          <span className={s.moveToggleTitle}>
+            <span>{kind ?? title}</span>
+            <span className={s.meta}>{STATUS_WORD[move.status]}</span>
+          </span>
+          <span className={s.chevron}><Icon name="down" /></span>
+        </button>
+        {isExpanded && <div id={bodyId} className={`${s.moveBody} ${s.reveal}`}>{body()}</div>}
+      </li>
+    );
+  }
+
   return (
     <li className={s.move} data-status={move.status} data-big={facts ? true : undefined}>
-      <span className={s.step} aria-hidden>{move.status === 'executed' ? '✓' : n}</span>
-      <div className={s.moveBody}>
+      {step}
+      <div className={s.moveBody}>{body()}</div>
+    </li>
+  );
+
+  function body() {
+    return (
+      <>
         {facts && (
           <div className={s.bigFacts}>
             <p className={s.eyebrow}>{kind}</p>
@@ -239,7 +268,7 @@ function Move({ move, n, locked, onDecide, facts }: {
           </div>
         )}
         {err && <p className={s.error} role="alert">{err}</p>}
-      </div>
-    </li>
-  );
+      </>
+    );
+  }
 }

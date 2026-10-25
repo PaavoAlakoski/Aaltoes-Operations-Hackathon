@@ -13,7 +13,7 @@ function minutesAgo(iso: string): string {
 }
 
 /** What the banner and the pill both need, or null when the car is not waiting for a tracked pickup. */
-function usePickup(vehicle: Vehicle | undefined) {
+export function usePickup(vehicle: Vehicle | undefined) {
   const { sites, staff } = useOps();
   if (!vehicle || vehicle.status !== 'waiting_pickup' || !vehicle.pickup_site_id) return null;
   const site = sites.get(vehicle.pickup_site_id);

@@ -187,3 +187,33 @@ a.row:hover { background: var(--hover); }
 .messages li[data-mine] { background: var(--hover); }
 .compose { display: grid; gap: var(--s2); }
 .compose .inline { justify-content: space-between; }
+
+/* The driver lane's two cards side by side, each shut until clicked. */
+.laneMoves[data-pair] { grid-template-columns: 1fr 1fr; gap: var(--s4); align-items: start; }
+@media (max-width: 560px) {
+  .laneMoves[data-pair] { grid-template-columns: 1fr; }
+}
+.move[data-collapsible] { flex-direction: column; gap: 0; }
+.move[data-big][data-collapsible] { padding: 0; }
+.moveToggle {
+  display: flex; align-items: center; gap: var(--s3); width: 100%; text-align: left;
+  border: 0; background: none; color: inherit; font: inherit; padding: var(--s3) var(--s4); cursor: pointer; border-radius: var(--radius);
+}
+.moveToggle:hover { background: var(--hover); }
+.moveToggleTitle { display: grid; gap: 2px; flex: 1; min-width: 0; font-weight: var(--weight-bold); }
+.chevron { display: grid; place-items: center; transition: transform 180ms ease; }
+.move[data-open] .chevron { transform: rotate(180deg); }
+.move[data-collapsible] .moveBody { padding: 0 var(--s4) var(--s4); }
+.reveal { animation: reveal 180ms ease-out; }
+@keyframes reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .chevron { transition: none; }
+  .reveal { animation: none; }
+}
+
+/* The one car on its order page. */
+.mapSmall { height: 280px; border-radius: var(--radius); border: 1px solid var(--line); z-index: 0; margin-bottom: var(--s4); }
+
+/* Telling the pickup dealer the driver is late. */
+.dealer { border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s4); margin-bottom: var(--s4); display: grid; gap: var(--s3); }
+.dealerHead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); flex-wrap: wrap; }

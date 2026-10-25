@@ -22,23 +22,32 @@ function colour(tone: Tone): string {
   return css.getPropertyValue(v).trim() || '#726958';
 }
 
-export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelect }: {
+export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelect, focus, site, className }: {
   corridors: Corridor[];
   vehicles: Vehicle[];
   /** Cars with an incident that is not resolved. */
   flagged: Set<string>;
   selectedVehicle: string | null;
   onSelect: (vehicleId: string) => void;
+  /** Start here, and follow it when it moves off screen, instead of the whole network. */
+  focus?: { lat: number; lng: number; zoom?: number } | null;
+  /** The pickup dealer, as a ring. */
+  site?: { lat: number; lng: number; name: string } | null;
+  className?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const markers = useRef(new Map<string, L.CircleMarker>());
   const select = useRef(onSelect);
   select.current = onSelect;
+  const start = useRef(focus);
 
   useEffect(() => {
     if (!el.current) return;
-    const m = L.map(el.current, { zoomControl: true, attributionControl: true }).setView([57.5, 15.5], 5);
+    const m = L.map(el.current, { zoomControl: true, attributionControl: true }).setView(
+      start.current ? [start.current.lat, start.current.lng] : [57.5, 15.5],
+      start.current ? (start.current.zoom ?? 9) : 5,
+    );
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 12,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -60,6 +69,22 @@ export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelec
     });
     return () => lines.forEach((l) => l.remove());
   }, [corridors]);
+
+  // Follow the car, but only once it leaves the middle of the view.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !focus) return;
+    if (!m.getBounds().pad(-0.2).contains([focus.lat, focus.lng])) m.panTo([focus.lat, focus.lng]);
+  }, [focus?.lat, focus?.lng]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !site) return;
+    const ring = L.circleMarker([site.lat, site.lng], {
+      radius: 8, color: colour('grey'), weight: 3, fillColor: '#fffef7', fillOpacity: 1,
+    }).bindTooltip(site.name).addTo(m);
+    return () => { ring.remove(); };
+  }, [site?.lat, site?.lng, site?.name]);
 
   useEffect(() => {
     const m = map.current;
@@ -92,5 +117,5 @@ export function LiveMap({ corridors, vehicles, flagged, selectedVehicle, onSelec
     }
   }, [vehicles, flagged, selectedVehicle]);
 
-  return <div ref={el} className={s.map} role="region" aria-label="Map of cars on their corridors" />;
+  return <div ref={el} className={className ?? s.map} role="region" aria-label="Map of cars on their corridors" />;
 }
