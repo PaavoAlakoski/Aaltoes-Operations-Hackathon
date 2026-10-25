@@ -1,7 +1,8 @@
 /* Live operations inside Needs action and the order page. Brand tokens only; colour still means status. */
 
 /* The live blocks */
-.now { margin-bottom: var(--s6); padding-bottom: var(--s5); border-bottom: 1px solid var(--line); }
+/* The live block is the whole Needs action page now: no divider under it. */
+.now { margin-bottom: var(--s6); }
 .orderLive { margin-bottom: var(--s6); padding: var(--s4); border: 1px solid var(--line-strong); border-radius: var(--radius); }
 .nowHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--s2) var(--s4); margin-bottom: var(--s3); }
 .nowTitle { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--size-body); font-weight: var(--weight-bold); }
@@ -193,17 +194,23 @@ a.row:hover { background: var(--row-hover); }
 .inTimePill[data-state='in'] { background: var(--green-ink); }
 .inTimePill[data-state='late'] { background: var(--red); }
 
-/* The double recovery: the car on one side, the stranded driver on the other. */
-.lanes { display: grid; gap: var(--s4); padding: var(--s4); grid-template-columns: 1fr; }
-@media (min-width: 720px) {
-  .lanes { grid-template-columns: 1fr 1fr; }
-}
-.lane { min-width: 0; display: grid; align-content: start; gap: var(--s3); }
+/* The double recovery: three equal cards in one grid. The car's lane spans one column, the stranded
+   driver's lane one per card; inner and outer gaps match, so every card is the same width. */
+.lanes { display: grid; gap: var(--s5); padding: var(--s4); grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+.lane { min-width: 0; display: grid; grid-template-rows: auto 1fr; gap: var(--s3); }
 .laneTitle { font-size: var(--size-body); font-weight: var(--weight-bold); }
-.laneMoves { display: grid; gap: var(--s3); }
-.move[data-big] {
-  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s4); background: var(--bg);
+.laneMoves { display: grid; gap: var(--s5); align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 768px) {
+  .lanes { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
+  .lane { grid-column: span var(--span, 1); }
+  .laneMoves { grid-template-columns: repeat(var(--span, 1), minmax(0, 1fr)); }
 }
+.move[data-big] {
+  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: var(--s5); background: var(--card); height: 100%;
+}
+/* Equal-height cards: the facts on top, Approve and Reject at the bottom of every card. */
+.move[data-big] .moveBody { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
+.move[data-big] .actions { margin-top: auto; padding-top: var(--s3); }
 .move[data-big]:last-child { border-bottom: 1px solid var(--line-strong); }
 .move[data-big][data-status='executed'] { border-color: var(--green); }
 .bigFacts { display: grid; gap: var(--s1); margin-bottom: var(--s2); }
@@ -219,11 +226,6 @@ a.row:hover { background: var(--row-hover); }
 .compose { display: grid; gap: var(--s2); }
 .compose .inline { justify-content: space-between; }
 
-/* The driver lane's two cards side by side, each shut until clicked. */
-.laneMoves[data-pair] { grid-template-columns: 1fr 1fr; gap: var(--s4); align-items: start; }
-@media (max-width: 560px) {
-  .laneMoves[data-pair] { grid-template-columns: 1fr; }
-}
 .move[data-collapsible] { flex-direction: column; gap: 0; }
 .move[data-big][data-collapsible] { padding: 0; }
 .moveToggle {

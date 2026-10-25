@@ -1,7 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useEffect } from 'react';
-import { useStore } from '../data/store';
-import { NEEDS_YOU_LIMIT } from '../domain/triage';
+import { useOps } from '../live/ops';
 import { Account } from '../live/Live';
 import s from './Shell.module.css';
 
@@ -13,14 +12,15 @@ const NAV = [
 ];
 
 export function Shell() {
-  const { triage } = useStore();
+  const ops = useOps();
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  // The badge counts what Needs action shows: the most urgent orders, never more than the limit.
-  const needs = Math.min(triage?.rows.length ?? 0, NEEDS_YOU_LIMIT);
+  // The badge counts live incidents with a proposal waiting for Approve or Reject.
+  const waiting = new Set(ops.proposals.filter((p) => p.moves.some((m) => m.status === 'pending')).map((p) => p.incidentId));
+  const needs = ops.incidents.filter((i) => i.status !== 'resolved' && waiting.has(i.id)).length;
 
   return (
     <div className={s.app}>

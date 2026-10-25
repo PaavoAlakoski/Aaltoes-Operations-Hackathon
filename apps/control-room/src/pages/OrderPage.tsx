@@ -302,7 +302,7 @@ function Timeline({ entries, now }: { entries: TimelineEntry[]; now: string }) {
   if (entries.length === 0) return null;
   return (
     <details className={s.section}>
-      <summary className={s.sectionTitle}>What happened <span className={s.count}>{entries.length}</span></summary>
+      <summary className={s.sectionTitle}>History <span className={s.count}>{entries.length}</span></summary>
       <ol className={s.timeline}>
         {shown.map((e) => (
           <li key={e.id} className={s.entry}>

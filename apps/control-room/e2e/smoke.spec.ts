@@ -1,6 +1,6 @@
-// The main flow, end to end against the real database: open the queue, open
-// CD-420593, approve the agent's proposal, see the numbered outcome, check a
-// second decision is refused, undo it on the order page.
+// The main flow, end to end against the real database: open CD-420593, approve
+// the agent's proposal, see the numbered outcome, check a second decision is
+// refused, undo it on the order page.
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,13 +25,7 @@ test.beforeEach(async ({ request }) => clearLive(request));
 test.afterAll(async ({ request }) => clearLive(request));
 
 test('approve the empty-pickup proposal, see it decided, then undo it', async ({ page, request }) => {
-  await page.goto('/');
-  await expect(page.locator('a[data-row]').first()).toBeVisible();
-  const row = page.getByRole('link', { name: /CD-420593/ });
-  await expect(row).toContainText('Driver found no car at pickup');
-
-  await row.click();
-  await expect(page).toHaveURL(/\/orders\/CD-420593$/);
+  await page.goto('/orders/CD-420593');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('BMW M4');
   const lead = page.getByRole('article');
   await expect(lead.getByRole('heading', { name: 'Needs human confirmation' })).toBeVisible();
@@ -54,39 +48,29 @@ test('approve the empty-pickup proposal, see it decided, then undo it', async ({
   expect(second.status()).toBe(409);
   expect(((await second.json()) as { message: string }).message).toMatch(/Already decided/);
 
-  // Decided, the order leaves Needs action; undo on the order page brings the decision back.
-  await page.getByRole('link', { name: /Needs action/ }).first().click();
-  await expect(page.getByRole('link', { name: /CD-420593/ })).toHaveCount(0);
+  // Undo on the order page brings the decision back.
+  await lead.getByRole('button', { name: /Undo/ }).click();
+  await expect(lead.getByRole('button', { name: 'Approve' })).toBeVisible();
+});
+
+test('a decision made elsewhere shows on the order page without a reload, and so does its undo', async ({ page, request }) => {
   await page.goto('/orders/CD-420593');
-  await page.getByRole('article').getByRole('button', { name: /Undo/ }).click();
-  await expect(page.getByRole('article').getByRole('button', { name: 'Approve' })).toBeVisible();
-});
-
-test('the queue works from the keyboard', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('a[data-row]').first()).toBeVisible();
-  await page.keyboard.press('j');
-  await expect(page.locator('a[data-row]').first()).toBeFocused();
-  await page.keyboard.press('j');
-  await page.keyboard.press('k');
-  await expect(page.locator('a[data-row]').first()).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/orders\/CD-420593$/);
-});
-
-test('a decision made elsewhere takes the order off Needs action without a reload, and its undo brings it back', async ({ page, request }) => {
-  await page.goto('/');
-  const row = page.getByRole('link', { name: /CD-420593/ });
-  await expect(row).toBeVisible();
+  const lead = page.getByRole('article');
+  await expect(lead.getByRole('button', { name: 'Approve' })).toBeVisible();
 
   // Someone else, in another browser, approves the proposal.
   const made = await request.post(`${api}/rest/v1/rpc/decide`, {
     headers, data: { p_order_id: ORDER, p_target_id: PROPOSAL, p_action: 'approve' },
   });
   expect(made.ok()).toBe(true);
-  await expect(row).toHaveCount(0, { timeout: 15000 });
+  await expect(lead).toContainText('Decided', { timeout: 15000 });
 
   // And undoes it.
   await request.post(`${api}/rest/v1/rpc/undo_decision`, { headers, data: { p_id: ((await made.json()) as { id: string }).id } });
-  await expect(page.getByRole('link', { name: /CD-420593/ })).toBeVisible({ timeout: 15000 });
+  await expect(lead.getByRole('button', { name: 'Approve' })).toBeVisible({ timeout: 15000 });
+});
+
+test('signed out, Needs action asks to sign in instead of showing an empty page', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('Sign in to see what needs a decision.')).toBeVisible();
 });

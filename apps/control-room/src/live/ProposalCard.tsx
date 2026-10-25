@@ -1,7 +1,7 @@
 // One agent proposal: what it found, then each move as a step that a person
 // approves or rejects on its own. Nothing here acts; approving records the
 // decision and the backend carries out that one move.
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { euros, localTime, type Proposal, type Suggestion } from '@bahn/shared';
 import { Icon } from '../ui/Icon';
 import s from './live.module.css';
@@ -117,7 +117,8 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
       </header>
 
       {recovery && (
-        <div className={s.lanes}>
+        // Three equal cards: the car's lane takes one column, the stranded driver's lane one per card.
+        <div className={s.lanes} style={{ '--cols': (carMoves.length > 0 ? 1 : 0) + driverMoves.length } as CSSProperties}>
           {carMoves.length > 0 && (
             <section className={s.lane} aria-label="The car">
               <h4 className={s.laneTitle}>The car: keep the pickup today</h4>
@@ -129,11 +130,11 @@ export function ProposalCard({ proposal, canApproveStatus, onDecide, timeZone = 
             </section>
           )}
           {driverMoves.length > 0 && (
-            <section className={s.lane} aria-label="The driver">
+            <section className={s.lane} aria-label="The driver" style={{ '--span': driverMoves.length } as CSSProperties}>
               <h4 className={s.laneTitle}>{strandedName ?? 'The driver'}: tonight and tomorrow</h4>
               <ol className={s.laneMoves} data-pair={driverMoves.length > 1 || undefined}>
                 {driverMoves.map((m) => (
-                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} collapsible />
+                  <Move key={m.id} move={m} n={number(m)} locked={false} onDecide={onDecide} facts={facts(m, timeZone)} />
                 ))}
               </ol>
             </section>

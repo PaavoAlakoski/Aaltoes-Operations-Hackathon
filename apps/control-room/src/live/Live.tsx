@@ -44,7 +44,7 @@ export function LiveNow() {
     <section className={s.now} aria-labelledby="live-now">
       <div className={s.nowHead}>
         <h2 id="live-now" className={s.nowTitle}>On the road now</h2>
-        {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <OnShift />}
+        {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <ConnectionWarning />}
       </div>
       {ops.status === 'ready' && ops.profile && ops.profile.role !== 'driver' && <Kpis />}
       <LiveNowBody />
@@ -127,11 +127,11 @@ function Room() {
   const ops = useOps();
   const { incidents, vehicles, proposals } = ops;
   const navigate = useNavigate();
-  const [showResolved, setShowResolved] = useState(false);
   const [simErr, setSimErr] = useState<string | null>(null);
 
   const open = incidents.filter((i) => i.status !== 'resolved');
-  const shown = showResolved ? incidents : open;
+  // Only open incidents: a resolved one needs nobody, and its order page keeps the history.
+  const shown = open;
   const pendingByIncident = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of proposals) m.set(p.incidentId, (m.get(p.incidentId) ?? 0) + p.moves.filter((x) => x.status === 'pending').length);
@@ -166,9 +166,6 @@ function Room() {
         <section className={s.queue} aria-label="Incidents">
           <div className={s.queueHead}>
             <h3 className={s.h2}>Incidents</h3>
-            <label className={s.toggle}>
-              <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} /> Show resolved
-            </label>
           </div>
           {shown.length === 0 ? (
             <Empty title="Nothing open.">New incidents from drivers, the system and the agent appear here as they happen.</Empty>
@@ -241,15 +238,11 @@ function ResetDemo() {
   );
 }
 
-function OnShift() {
-  const { online, profile, live } = useOps();
-  const others = online.filter((p) => p.user_id !== profile?.id);
-  return (
-    <span className={s.onShift}>
-      <span className={s.liveDot} data-live={live} /> {live === 'live' ? 'Live' : live === 'connecting' ? 'Connecting…' : 'Not live'}
-      {others.length > 0 && <> · with {others.map((p) => p.name.split(' ')[0]).join(', ')}</>}
-    </span>
-  );
+/** Silent while live updates flow; a short notice only when they stop. */
+function ConnectionWarning() {
+  const { live } = useOps();
+  if (live !== 'offline') return null;
+  return <p className={s.error} role="status">Live updates are down. It reconnects on its own; until then, reload to see changes.</p>;
 }
 
 function Kpis() {
