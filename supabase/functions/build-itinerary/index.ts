@@ -15,9 +15,10 @@
 // a straight-line estimate, or it is more than two hours old.
 //
 // Leo's order has the full plan (build). Every other driver's order gets a
-// plain one (buildPlain): pickup, the drive (with the ferry when the car is
-// booked on one) and the handover, timed from the car's live state rather
-// than shifted dataset times.
+// plain one (buildPlain): the trip from home (local transport, train, or a
+// flight with trains either side), pickup, the drive (with the ferry when the
+// car is booked on one), the handover and the trip home, timed from the car's
+// live state rather than shifted dataset times.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { kmBetween, routePath, type LatLng, type RoutePath } from "../_shared/google.ts";
 
@@ -39,7 +40,7 @@ type LngLat = [number, number];
 type Place = { name: string; lat: number; lng: number };
 type Leg = {
   id: string;
-  kind: "train" | "flight" | "pickup" | "drive" | "ferry" | "handover";
+  kind: "transit" | "train" | "flight" | "pickup" | "drive" | "ferry" | "handover";
   title: string;
   from: Place;
   to: Place;
@@ -91,10 +92,46 @@ const CITIES: Record<string, LatLng> = {
   Lahti: { lat: 60.9827, lng: 25.6612 }, Leipzig: { lat: 51.3397, lng: 12.3731 }, Lille: { lat: 50.6292, lng: 3.0573 },
   Lyon: { lat: 45.764, lng: 4.8357 }, "Malmö": { lat: 55.605, lng: 13.0038 }, Marseille: { lat: 43.2965, lng: 5.3698 },
   Munich: { lat: 48.1351, lng: 11.582 }, Odense: { lat: 55.4038, lng: 10.4024 }, Oulu: { lat: 65.0121, lng: 25.4651 },
-  Paris: { lat: 48.8566, lng: 2.3522 }, Rotterdam: { lat: 51.9244, lng: 4.4777 }, "Seinäjoki": { lat: 62.7903, lng: 22.8403 },
+  Paris: { lat: 48.8566, lng: 2.3522 }, Pori: { lat: 61.4851, lng: 21.7974 }, Rotterdam: { lat: 51.9244, lng: 4.4777 }, "Seinäjoki": { lat: 62.7903, lng: 22.8403 },
   Stockholm: { lat: 59.3293, lng: 18.0686 }, Stuttgart: { lat: 48.7758, lng: 9.1829 }, Tampere: { lat: 61.4978, lng: 23.761 },
   Turku: { lat: 60.4518, lng: 22.2666 }, Vantaa: { lat: 60.2934, lng: 25.0378 }, Vienna: { lat: 48.2082, lng: 16.3738 },
 };
+
+// The airports a driver flies between; the one nearest a city is used.
+const AIRPORTS: (Place & { code: string; tz: string })[] = [
+  { code: "HEL", name: "Helsinki Airport", lat: 60.3172, lng: 24.9633, tz: "Europe/Helsinki" },
+  { code: "OUL", name: "Oulu Airport", lat: 64.9301, lng: 25.3546, tz: "Europe/Helsinki" },
+  { code: "ARN", name: "Stockholm Arlanda", lat: 59.6519, lng: 17.9186, tz: "Europe/Stockholm" },
+  { code: "GOT", name: "Gothenburg Landvetter", lat: 57.6628, lng: 12.2798, tz: "Europe/Stockholm" },
+  { code: "CPH", name: "Copenhagen Airport", lat: 55.618, lng: 12.656, tz: "Europe/Copenhagen" },
+  { code: "BLL", name: "Billund Airport", lat: 55.7403, lng: 9.1518, tz: "Europe/Copenhagen" },
+  { code: "HAM", name: "Hamburg Airport", lat: 53.6304, lng: 9.9882, tz: "Europe/Berlin" },
+  { code: "BER", name: "Berlin Brandenburg", lat: 52.3667, lng: 13.5033, tz: "Europe/Berlin" },
+  { code: "LEJ", name: "Leipzig/Halle Airport", lat: 51.4239, lng: 12.2364, tz: "Europe/Berlin" },
+  { code: "DUS", name: "Düsseldorf Airport", lat: 51.2895, lng: 6.7668, tz: "Europe/Berlin" },
+  { code: "CGN", name: "Cologne/Bonn Airport", lat: 50.8659, lng: 7.1427, tz: "Europe/Berlin" },
+  { code: "FRA", name: "Frankfurt Airport", lat: 50.0379, lng: 8.5622, tz: "Europe/Berlin" },
+  { code: "STR", name: "Stuttgart Airport", lat: 48.6899, lng: 9.222, tz: "Europe/Berlin" },
+  { code: "MUC", name: "Munich Airport", lat: 48.3538, lng: 11.7861, tz: "Europe/Berlin" },
+  { code: "VIE", name: "Vienna Airport", lat: 48.1103, lng: 16.5697, tz: "Europe/Vienna" },
+  { code: "AMS", name: "Amsterdam Schiphol", lat: 52.3105, lng: 4.7683, tz: "Europe/Amsterdam" },
+  { code: "BRU", name: "Brussels Airport", lat: 50.901, lng: 4.4844, tz: "Europe/Brussels" },
+  { code: "CDG", name: "Paris Charles de Gaulle", lat: 49.0097, lng: 2.5479, tz: "Europe/Paris" },
+  { code: "LYS", name: "Lyon Saint-Exupéry", lat: 45.7256, lng: 5.0811, tz: "Europe/Paris" },
+  { code: "MRS", name: "Marseille Provence", lat: 43.4393, lng: 5.2214, tz: "Europe/Paris" },
+];
+// Where to buy a train ticket, by the country's time zone.
+const RAIL: Record<string, { name: string; url: string }> = {
+  "Europe/Helsinki": { name: "the VR app or vr.fi", url: "https://www.vr.fi/en" },
+  "Europe/Berlin": { name: "the DB Navigator app or bahn.de", url: "https://int.bahn.de/en" },
+  "Europe/Stockholm": { name: "the SJ app or sj.se", url: "https://www.sj.se/en" },
+  "Europe/Copenhagen": { name: "the DSB app or dsb.dk", url: "https://www.dsb.dk/en/" },
+  "Europe/Vienna": { name: "the ÖBB app or oebb.at", url: "https://www.oebb.at/en/" },
+  "Europe/Amsterdam": { name: "the NS app or ns.nl", url: "https://www.ns.nl/en" },
+  "Europe/Brussels": { name: "the SNCB app or belgiantrain.be", url: "https://www.belgiantrain.be/en" },
+  "Europe/Paris": { name: "the SNCF Connect app", url: "https://www.sncf-connect.com/en-en/" },
+};
+const HOME_TZ: Record<string, string> = { FI: "Europe/Helsinki", DE: "Europe/Berlin", SE: "Europe/Stockholm", DK: "Europe/Copenhagen" };
 
 // Minutes, from the operators' timetables.
 const TRAIN_TAMPERE_AIRPORT = 110;
@@ -442,8 +479,132 @@ async function address(id: string | null) {
 
 const minutesText = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : `${Math.round(m)} min`);
 
-/** Any order without the full plan: pickup, the drive (or drive, ferry, drive) and the handover. */
-async function buildPlain(vehicle: Row): Promise<{ legs: Leg[]; shift: number; departureId: string | null }> {
+/** A driver's own trip between home and a job, as legs; timed by `timeTrip`. */
+type Stop = Place & { tz: string; city: string };
+type Hop = { kind: "transit" | "train" | "flight"; from: Stop; to: Stop; minutes: number; km: number; code?: [string, string] };
+const round5 = (m: number) => Math.max(5, Math.round(m / 5) * 5);
+// Trains average about 85 km/h over the straight line between cities.
+const trainMinutes = (km: number) => round5((km / 85) * 60 + 15);
+const flightMinutes = (km: number) => round5((km / 750) * 60 + 30);
+const kmOf = (a: Place, b: Place) => kmBetween(a, b);
+
+/** Local transport within a city, a train, or (across the sea or far) a flight with the trains to and from the airports. */
+function hops(a: Stop, b: Stop): Hop[] {
+  const km = kmOf(a, b);
+  if (km < 25) return [{ kind: "transit", from: a, to: b, minutes: round5(20 + km * 2), km }];
+  const overSea = (a.tz === "Europe/Helsinki") !== (b.tz === "Europe/Helsinki");
+  if (!overSea && km < 600) return [{ kind: "train", from: a, to: b, minutes: trainMinutes(km), km }];
+  const nearest = (p: Place) => AIRPORTS.reduce((x, y) => (kmOf(p, y) < kmOf(p, x) ? y : x));
+  const ap = nearest(a), bp = nearest(b);
+  const out: Hop[] = [];
+  const ground = (x: Stop, y: Stop) => {
+    const d = kmOf(x, y);
+    if (d < 3) return;
+    out.push(d < 40 ? { kind: "transit", from: x, to: y, minutes: round5(20 + d), km: d } : { kind: "train", from: x, to: y, minutes: trainMinutes(d), km: d });
+  };
+  const A: Stop = { ...ap, city: a.city }, B: Stop = { ...bp, city: b.city };
+  ground(a, A);
+  const fk = kmOf(ap, bp);
+  out.push({ kind: "flight", from: A, to: B, minutes: flightMinutes(fk), km: fk, code: [ap.code, bp.code] });
+  ground(B, b);
+  return out;
+}
+
+/** The wait kept before a hop: two hours before a flight, a little before anything else. */
+const waitBefore = (h: Hop) => (h.kind === "flight" ? SLACK_AIRPORT : 15);
+
+/**
+ * Times a trip's hops: backwards so the last one arrives by `arriveBy`, or
+ * forwards from `departAt`. Each leg's status comes from the clock; the
+ * caller corrects it from the car's state.
+ */
+function timeTrip(hs: Hop[], id: string, purpose: "out" | "home", at: { arriveBy?: number; departAt?: number }): Leg[] {
+  const times: [number, number][] = [];
+  if (at.arriveBy != null) {
+    let end = at.arriveBy;
+    for (let i = hs.length - 1; i >= 0; i--) {
+      const start = end - hs[i].minutes * MIN;
+      times[i] = [start, end];
+      end = start - (i > 0 ? waitBefore(hs[i]) : 0) * MIN;
+    }
+  } else {
+    let start = at.departAt!;
+    for (let i = 0; i < hs.length; i++) {
+      if (i > 0) start += waitBefore(hs[i]) * MIN;
+      times[i] = [start, start + hs[i].minutes * MIN];
+      start = times[i][1];
+    }
+  }
+  const now = Date.now();
+  return hs.map((h, i) => {
+    const [dep, arr] = times[i];
+    const st: Leg["status"] = arr <= now ? "done" : dep <= now ? "now" : "next";
+    const next = hs[i + 1];
+    const slack = next ? waitBefore(next) : 0;
+    const rail = RAIL[h.from.tz];
+    const title = h.kind === "flight" ? `Flight to ${h.to.city}`
+      : h.kind === "transit" ? `Get to ${h.to.name}`
+      : `Train to ${h.to.city === h.from.city ? h.to.name : h.to.city}`;
+    const instructions = h.kind === "flight"
+      ? [
+        `${h.code![0]} ${hhmm(dep, h.from.tz)} → ${h.code![1]} ${hhmm(arr, h.to.tz)} local time.`,
+        purpose === "out"
+          ? "Hand luggage only; the car has no room for a suitcase with the delivery papers."
+          : "Book the cheapest direct flight; keep the receipt for your expense claim.",
+      ]
+      : h.kind === "transit"
+      ? [
+        `Bus, tram or train from ${h.from.name} to ${h.to.name}, about ${minutesText(h.minutes)}. Leave by ${hhmm(dep, h.from.tz)}.`,
+        `Route: ${transit(h.from, h.to)}`,
+        "Keep the receipt for your expense claim.",
+      ]
+      : [
+        `Train from ${h.from.city} at ${hhmm(dep, h.from.tz)}, about ${minutesText(h.minutes)}; arrives ${hhmm(arr, h.to.tz)}.`,
+        `Buy the ticket in ${rail?.name ?? "the operator's app"}; keep the receipt for your expense claim.`,
+        `Route: ${transit(h.from, h.to)}`,
+      ];
+    if (purpose === "out" && !next && h.kind === "train") instructions.push(`From the station it is a short taxi or bus ride to ${h.to.name}.`);
+    const link = h.kind === "flight"
+      ? { label: "Find flights", url: `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from ${h.code![0]} to ${h.code![1]} on ${ymd(dep, h.from.tz)}`)}` }
+      : h.kind === "train" && rail ? { label: "Buy ticket", url: rail.url }
+      : { label: "Route", url: transit(h.from, h.to) };
+    return {
+      id: `${id}-${i + 1}`, kind: h.kind, title, from: strip(h.from), to: strip(h.to),
+      depart_at: iso(dep), arrive_at: iso(arr), timezone: h.from.tz, arrive_timezone: h.to.tz,
+      deadline_at: null, minutes: h.minutes, slack_minutes: slack, instructions, link, booking_ref: null,
+      status: st, progress: st === "done" ? 1 : st === "now" ? Math.min((now - dep) / Math.max(arr - dep, MIN), 1) : 0,
+      path: null, km: Math.round(h.km), source: "plan", evidence: [],
+    };
+  });
+}
+
+/** Makes the first leg not yet done the one happening now, and every later one next. */
+function promote(ls: Leg[]) {
+  let seen = false;
+  for (const l of ls) {
+    if (l.status === "done") continue;
+    if (!seen) l.status = "now";
+    else Object.assign(l, { status: "next", progress: 0 });
+    seen = true;
+  }
+}
+const strip = (s: Stop): Place => ({ name: s.name, lat: s.lat, lng: s.lng });
+
+/** The driver's home, from the dataset's driver record. */
+async function homeOf(driverRef: string | null): Promise<Stop | null> {
+  if (!driverRef) return null;
+  const { data } = await db.from("records").select("data").eq("collection", "drivers").eq("id", driverRef).maybeSingle();
+  const d = data?.data as Row | undefined;
+  const at = d ? CITIES[d.home_city] : undefined;
+  if (!d || !at) return null;
+  return { name: `Home, ${d.home_city}`, ...at, city: d.home_city, tz: HOME_TZ[d.home_country] ?? "Europe/Berlin" };
+}
+
+/**
+ * Any order without the full plan: the driver's trip from home, pickup, the
+ * drive (or drive, ferry, drive), the handover and the trip home.
+ */
+async function buildPlain(me: { driver_ref: string | null }, vehicle: Row): Promise<{ legs: Leg[]; shift: number; departureId: string | null }> {
   const r = await records(vehicle.order_id);
   const { data: orderRow } = await db.from("records").select("data").eq("collection", "orders").eq("id", vehicle.order_id).maybeSingle();
   const order = orderRow?.data as Row | undefined;
@@ -634,7 +795,33 @@ async function buildPlain(vehicle: Row): Promise<{ legs: Leg[]; shift: number; d
     link: navigate(delivery), booking_ref: null, status: legStatus(handoverIndex),
     progress: legStatus(handoverIndex) === "done" ? 1 : 0, path: null, km: null, source: "dataset", evidence: [],
   });
-  return { legs, shift: 0, departureId: dep?.id ?? null };
+
+  // The driver's own trips: from home to the pickup, and home after the handover.
+  const home = await homeOf(me.driver_ref);
+  if (!home) return { legs, shift: 0, departureId: dep?.id ?? null };
+  const start: Stop = { ...pickup, city: site?.city ?? from.city, tz: fromTz };
+  const end: Stop = { ...delivery, city: to.city, tz: toTz };
+  const outHops = hops(home, start);
+  // A short trip gets there an hour before. A flight, a long train or a trip
+  // that would land in the night gets there by 20:00 the evening before.
+  const long = outHops.some((h) => h.kind === "flight") || outHops.reduce((s, h) => s + h.minutes, 0) > 4 * 60;
+  const shortBy = pickupAt - (outHops[0].kind === "transit" ? 30 : 60) * MIN;
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: fromTz }).format(new Date(shortBy)));
+  let evening = localAt(pickupAt, "20:00", fromTz);
+  if (evening > pickupAt - 60 * MIN) evening -= DAY;
+  const arriveBy = long || hour >= 22 || hour < 6 ? evening : shortBy;
+  const out = timeTrip(outHops, "out", "out", { arriveBy });
+  out.at(-1)!.slack_minutes = Math.round((pickupAt - arriveBy) / MIN);
+  if (pickupAt - arriveBy > 6 * 60 * MIN) out.at(-1)!.instructions.push(`Sleep near ${pickup.name}; the pickup is ${hhmm(pickupAt, fromTz)}.`);
+  const back = timeTrip(hops(end, home), "home", "home", { departAt: handoverStart + (SLACK_AFTER_HANDOVER + 60) * MIN });
+
+  // The car's state says where the driver is: past the pickup, the trip out
+  // is behind them; until the handover, the trip home is ahead.
+  if (current > 0) for (const l of out) Object.assign(l, { status: "done", progress: 1 });
+  if (current <= handoverIndex) for (const l of back) Object.assign(l, { status: "next", progress: 0 });
+  if (current === 0) promote([...out, legs[0]]);
+  if (current > handoverIndex) promote(back);
+  return { legs: [...out, ...legs, ...back], shift: 0, departureId: dep?.id ?? null };
 }
 
 /** The first time at or after `after` when the clock in tz shows the time isoTime has there. */
@@ -692,15 +879,20 @@ Deno.serve(async (req) => {
   const savedNow = savedLegs.find((l) => l.status === "now")?.kind ?? null;
   // A straight line is a fallback; try Google again for it.
   const estimated = savedLegs.some((l) => l.source === "estimate");
-  const fresh = saved && !body.rebuild && !estimated && saved.driver_id === me.id &&
-    saved.ferry_departure_id === (booking?.departure_id ?? null) &&
-    savedNow === legNow(vehicle.status, booking?.status === "boarded") &&
+  // Built before the driver's own trips were planned.
+  const travels = (k: Leg["kind"] | null) => k === "transit" || k === "train" || k === "flight";
+  const noTrips = !savedLegs.some((l) => travels(l.kind));
+  // On the way to the pickup or home again, the driver's trip is what is happening.
+  const expected = legNow(vehicle.status, booking?.status === "boarded");
+  const sameLeg = savedNow === expected || (travels(savedNow) && (expected === "pickup" || expected === null));
+  const fresh = saved && !body.rebuild && !estimated && !noTrips && saved.driver_id === me.id &&
+    saved.ferry_departure_id === (booking?.departure_id ?? null) && sameLeg &&
     Date.now() - Date.parse(saved.built_at) < REBUILD_AFTER_MS;
   if (fresh) return json({ itinerary: saved });
 
   try {
     const { legs, shift, departureId } = await build(me, vehicle).catch((e) => {
-      if (e instanceof NoPlan) return buildPlain(vehicle);
+      if (e instanceof NoPlan) return buildPlain(me, vehicle);
       throw e;
     });
     const row = { vehicle_id: vehicle.id, driver_id: me.id, legs, shift_seconds: shift, ferry_departure_id: departureId, built_at: new Date().toISOString() };

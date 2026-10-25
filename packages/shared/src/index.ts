@@ -25,7 +25,7 @@ export type ChatMessage = Tables<'driver_chat_messages'>;
 /** One step of a driver's job: getting there, the car's own legs, and home. */
 export type Leg = {
   id: string;
-  kind: 'train' | 'flight' | 'pickup' | 'drive' | 'ferry' | 'handover';
+  kind: 'transit' | 'train' | 'flight' | 'pickup' | 'drive' | 'ferry' | 'handover';
   title: string;
   from: { name: string; lat: number; lng: number };
   to: { name: string; lat: number; lng: number };

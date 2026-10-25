@@ -387,7 +387,7 @@ function progressOn(path: LngLat[], lat: number, lng: number): number | null {
 }
 
 const KIND_WORD: Record<Leg['kind'], string> = {
-  train: 'Train', flight: 'Flight', pickup: 'Pickup', drive: 'Drive', ferry: 'Ferry', handover: 'Handover',
+  transit: 'Local transport', train: 'Train', flight: 'Flight', pickup: 'Pickup', drive: 'Drive', ferry: 'Ferry', handover: 'Handover',
 };
 
 /** The whole job: where it stands, then every leg with what to do and how to book it. */
@@ -786,7 +786,8 @@ function Inbox({ db, userId, messages, incidents, setMessages }: {
     <div className="stack">
       {messages.length === 0 ? <p className="card meta">No messages from control yet.</p> : (
         <ol className="messages">
-          {messages.map((m) => (
+          {/* State is newest-first; show oldest at the top, like a conversation. */}
+          {[...messages].reverse().map((m) => (
             <li key={m.id} className="card" data-mine={m.from_user === userId || undefined}>
               <p className="meta">
                 {m.from_user === userId ? 'You' : m.from_user ? 'Control' : 'Control (agent)'}
