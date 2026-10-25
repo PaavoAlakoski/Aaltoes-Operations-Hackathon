@@ -8,6 +8,11 @@
 // The incident is inserted with the driver's own session, so the database
 // stamps it as the driver's report and the agent_triage trigger works out the
 // recovery for control as with any other report.
+//
+// The app also sends { event: "stationary" } when the car's position stops
+// changing. Then the agent writes first: it checks the ETA and asks the driver
+// why they are not moving. It does not tell control; the driver's answer does
+// that if one of the three criteria is met.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { driverEtaReport, keyPickupReport, loadPickupContext } from "../_shared/pickup.ts";
 
@@ -53,6 +58,14 @@ Work like this:
 - If control already has an open incident for the same problem, do not raise it again.
 
 Writing: plain, short, friendly English, like a text message. 24-hour clock, local time of the place.`;
+
+/** The agent's opening when tracking sees the car standing still. */
+const STATIONARY = (since: string, where: string) => `Tracking alert, not from the driver: the car's position has not
+changed since ${since} (${where}), although it should be driving. You suspect this could cause a delay.
+Call check_delivery first to see how much slack the car has against what it is booked on. Then write the driver one
+short message: say you noticed the car has not moved, ask what the reason is (traffic, a break, a problem with the
+car?), and if the ETA is at risk say so in one plain sentence with the time. Do not tell control; wait for the
+driver's answer.`;
 
 type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
 type LlmMessage =
@@ -184,20 +197,23 @@ async function runTool(name: string, input: Record<string, any>, run: Run): Prom
   }
 }
 
-async function answer(run: Run, history: { role: string; body: string }[]): Promise<string> {
+async function answer(run: Run, history: { role: string; body: string }[], alert?: string): Promise<string> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY") ?? Deno.env.get("OPENROUTER_API_KEY.");
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set for edge functions");
   const state = run.vehicleId ? await carState(run.vehicleId) : { now: new Date().toISOString(), car: null };
   const messages: LlmMessage[] = [
     { role: "system", content: `${SYSTEM}\n\nThe driver's car right now, as JSON:\n${JSON.stringify(state, null, 2)}` },
     ...history.map((m): LlmMessage => (m.role === "driver" ? { role: "user", content: m.body } : { role: "assistant", content: m.body })),
+    ...(alert ? [{ role: "user" as const, content: alert }] : []),
   ];
+  // An alert only asks the driver; telling control waits for their answer.
+  const offered = alert ? tools.filter((t) => t.function.name !== "notify_control_room") : tools;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "Bahn driver chat" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 4000, messages, tools, tool_choice: "auto", reasoning: { effort: "low" } }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 4000, messages, tools: offered, tool_choice: "auto", reasoning: { effort: "low" } }),
     });
     if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 500)}`);
     const body = await res.json();
@@ -246,14 +262,25 @@ Deno.serve(async (req) => {
   if (!me || me.role !== "driver") return json({ error: "The chat is for drivers." }, 403);
 
   let text = "";
+  let alert: string | undefined;
   try {
-    text = String((await req.json()).message ?? "").trim().slice(0, 4000);
+    const input = await req.json();
+    if (input.event === "stationary") {
+      const since = String(input.since ?? "a few minutes ago").slice(0, 40);
+      const where = String(input.where ?? "on the route").slice(0, 200);
+      alert = STATIONARY(since, where);
+    } else text = String(input.message ?? "").trim().slice(0, 4000);
   } catch { /* handled below */ }
-  if (!text) return json({ error: "message required" }, 400);
+  if (!text && !alert) return json({ error: "message required" }, 400);
+  if (alert && !me.vehicle_id) return json({ error: "No car to watch." }, 400);
 
-  const { data: mine, error: e1 } = await db.from("driver_chat_messages")
-    .insert({ driver_id: me.id, vehicle_id: me.vehicle_id, role: "driver", body: text }).select("*").single();
-  if (e1) return json({ error: e1.message }, 500);
+  let mine = null;
+  if (text) {
+    const { data, error: e1 } = await db.from("driver_chat_messages")
+      .insert({ driver_id: me.id, vehicle_id: me.vehicle_id, role: "driver", body: text }).select("*").single();
+    if (e1) return json({ error: e1.message }, 500);
+    mine = data;
+  } else await audit("agent.stationary_check", me.id, { vehicle_id: me.vehicle_id, alert });
 
   const { data: past } = await db.from("driver_chat_messages").select("role,body")
     .eq("driver_id", me.id).order("created_at", { ascending: false }).limit(HISTORY);
@@ -262,11 +289,12 @@ Deno.serve(async (req) => {
   const run: Run = { vehicleId: me.vehicle_id, driverId: me.id, asDriver, incidentId: null };
   let reply: string;
   try {
-    reply = await answer(run, history);
+    reply = await answer(run, history, alert);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("driver-chat failed", me.id, message);
     await audit("agent.chat_failed", me.id, { error: message.slice(0, 1000), incident_id: run.incidentId });
+    if (alert) return json({ error: message }, 502);
     reply = run.incidentId
       ? "I've told control about this and they will contact you. I couldn't write more just now; stay safe and stay with the car."
       : "Sorry, I couldn't answer just now. Please try again in a minute. If it's urgent or anyone is hurt, call 112.";
@@ -274,5 +302,5 @@ Deno.serve(async (req) => {
   const { data: theirs, error: e2 } = await db.from("driver_chat_messages")
     .insert({ driver_id: me.id, vehicle_id: me.vehicle_id, role: "agent", body: reply, incident_id: run.incidentId }).select("*").single();
   if (e2) return json({ error: e2.message }, 500);
-  return json({ messages: [mine, theirs], escalated: run.incidentId });
+  return json({ messages: mine ? [mine, theirs] : [theirs], escalated: run.incidentId });
 });
